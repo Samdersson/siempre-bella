@@ -1,9 +1,0 @@
-backend/api/productos/subir_imagenes.php:265: trailing whitespace.
-[32m+[m[41m        [m
-backend/api/secciones/listar.php:59: new blank line at EOF.
-frontend/src/pages/admin/Banners.jsx:229: trailing whitespace.
-[32m+[m[41m       [m
-frontend/src/pages/admin/Dashboard.jsx:260: trailing whitespace.
-[32m+[m[41m        [m
-frontend/src/pages/store/Wholesale.jsx:147: trailing whitespace.
-[32m+[m[41m  [m
