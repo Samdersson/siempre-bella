@@ -6,53 +6,94 @@ header("Content-Type: application/json; charset=utf-8");
 require_once __DIR__ . "/../../config/database.php";
 require_once __DIR__ . "/../../config/session.php";
 
-// Protección administrativa
-if (!isset($_SESSION["admin"])) {
-    http_response_code(401);
+/**
+ * Respuesta JSON.
+ */
+function responder($success, $mensaje, $codigo = 200, $datos = []) {
+
+    http_response_code($codigo);
 
     echo json_encode([
-        "success" => false,
-        "message" => "No tienes autorización para consultar este pedido."
-    ], JSON_UNESCAPED_UNICODE);
+        "success" => $success,
+        "message" => $mensaje,
+        "data" => $datos
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
     exit;
 }
 
-// Validar método
+// --------------------------------------------------
+// 1. VERIFICAR SESIÓN ADMINISTRATIVA
+// --------------------------------------------------
+
+if (!isset($_SESSION["admin"])) {
+    responder(
+        false,
+        "No tienes autorización para consultar este pedido.",
+        401
+    );
+}
+
+// --------------------------------------------------
+// 2. VALIDAR MÉTODO HTTP
+// --------------------------------------------------
+
 if ($_SERVER["REQUEST_METHOD"] !== "GET") {
-    http_response_code(405);
-
-    echo json_encode([
-        "success" => false,
-        "message" => "Método no permitido."
-    ], JSON_UNESCAPED_UNICODE);
-
-    exit;
+    responder(false, "Método no permitido.", 405);
 }
 
 try {
 
+    // --------------------------------------------------
+    // 3. VALIDAR IDENTIFICADOR
+    // --------------------------------------------------
+
+    $idRecibido = $_GET["id"] ?? null;
+
+    if (!is_string($idRecibido) && !is_int($idRecibido)) {
+        responder(
+            false,
+            "El identificador del pedido no es válido.",
+            400
+        );
+    }
+
     $id = filter_var(
-        $_GET["id"] ?? null,
+        $idRecibido,
         FILTER_VALIDATE_INT,
-        ["options" => ["min_range" => 1]]
+        [
+            "options" => [
+                "min_range" => 1
+            ]
+        ]
     );
 
     if ($id === false) {
-        http_response_code(400);
-
-        echo json_encode([
-            "success" => false,
-            "message" => "El identificador del pedido no es válido."
-        ], JSON_UNESCAPED_UNICODE);
-
-        exit;
+        responder(
+            false,
+            "El identificador del pedido no es válido.",
+            400
+        );
     }
 
+    // --------------------------------------------------
+    // 4. CONECTAR A LA BASE DE DATOS
+    // --------------------------------------------------
+
     $database = new Database();
+
     $connection = $database->connect();
 
-    // Consultar información principal
+    if (!$connection instanceof PDO) {
+        throw new RuntimeException(
+            "No fue posible conectar con la base de datos."
+        );
+    }
+
+    // --------------------------------------------------
+    // 5. CONSULTAR INFORMACIÓN PRINCIPAL
+    // --------------------------------------------------
+
     $consultaPedido = $connection->prepare("
         SELECT
             id,
@@ -78,17 +119,17 @@ try {
     $pedido = $consultaPedido->fetch(PDO::FETCH_ASSOC);
 
     if (!$pedido) {
-        http_response_code(404);
-
-        echo json_encode([
-            "success" => false,
-            "message" => "No se encontró el pedido solicitado."
-        ], JSON_UNESCAPED_UNICODE);
-
-        exit;
+        responder(
+            false,
+            "No se encontró el pedido solicitado.",
+            404
+        );
     }
 
-    // Consultar productos del pedido
+    // --------------------------------------------------
+    // 6. CONSULTAR PRODUCTOS DEL PEDIDO
+    // --------------------------------------------------
+
     $consultaDetalles = $connection->prepare("
         SELECT
             id,
@@ -110,26 +151,31 @@ try {
 
     $detalles = $consultaDetalles->fetchAll(PDO::FETCH_ASSOC);
 
-    echo json_encode([
-        "success" => true,
-        "message" => "Detalle del pedido consultado correctamente.",
-        "data" => [
+    // --------------------------------------------------
+    // 7. DEVOLVER INFORMACIÓN
+    // --------------------------------------------------
+
+    responder(
+        true,
+        "Detalle del pedido consultado correctamente.",
+        200,
+        [
             "pedido" => $pedido,
             "productos" => $detalles
         ]
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    );
 
 } catch (Throwable $e) {
 
+    // Registrar el error internamente.
     error_log(
         "Error consultando detalle del pedido mayorista: " .
         $e->getMessage()
     );
 
-    http_response_code(500);
-
-    echo json_encode([
-        "success" => false,
-        "message" => "No fue posible consultar el detalle del pedido."
-    ], JSON_UNESCAPED_UNICODE);
+    responder(
+        false,
+        "No fue posible consultar el detalle del pedido.",
+        500
+    );
 }
