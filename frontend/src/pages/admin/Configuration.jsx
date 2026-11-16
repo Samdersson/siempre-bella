@@ -21,6 +21,7 @@ const tiendaInicial = {
   whatsapp: "",
   monto_minimo_mayorista: "",
   moneda: "COP",
+  mensaje_envio: "",
 };
 
 const redInicial = {
@@ -93,6 +94,8 @@ function Configuration() {
         monto_minimo_mayorista:
           resultadoTienda.data?.tienda?.monto_minimo_mayorista ?? "",
         moneda: resultadoTienda.data?.tienda?.moneda || "COP",
+        mensaje_envio:
+          resultadoTienda.data?.tienda?.mensaje_envio || "",
       });
 
       setRedes(resultadoRedes.data || []);
@@ -442,6 +445,28 @@ function Configuration() {
                       required
                       disabled={guardandoTienda}
                     />
+
+                    <div className="category-form-field">
+                    <label htmlFor="tienda-mensaje-envio">
+                      Mensaje sobre los envíos
+                    </label>
+
+                    <textarea
+                      id="tienda-mensaje-envio"
+                      name="mensaje_envio"
+                      value={tienda.mensaje_envio}
+                      onChange={manejarCambioTienda}
+                      placeholder="Ej. El valor del envío se confirma directamente por WhatsApp según tu ubicación."
+                      maxLength={500}
+                      rows={3}
+                      disabled={guardandoTienda}
+                    />
+
+                    <small>
+                      Este mensaje se mostrará en el carrito. Máximo 500 caracteres.
+                      ({tienda.mensaje_envio.length}/500)
+                    </small>
+                  </div>
                   </div>
 
                   <div className="category-form-field">

@@ -41,6 +41,7 @@ try {
             whatsapp,
             monto_minimo_mayorista,
             moneda,
+            mensaje_envio,
             actualizado_en
         FROM configuracion_tienda
         WHERE id = 1
@@ -49,7 +50,7 @@ try {
 
     $consultaTienda->execute();
 
-    $tienda = $consultaTienda->fetch();
+    $tienda = $consultaTienda->fetch(PDO::FETCH_ASSOC);
 
     if (!$tienda) {
         throw new RuntimeException(
@@ -72,7 +73,7 @@ try {
 
     $consultaRedes->execute();
 
-    $redes = $consultaRedes->fetchAll();
+    $redes = $consultaRedes->fetchAll(PDO::FETCH_ASSOC);
 
     echo json_encode([
         'success' => true,

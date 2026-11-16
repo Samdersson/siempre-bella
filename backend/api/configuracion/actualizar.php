@@ -46,6 +46,7 @@ $nombre = trim($datos['nombre_tienda'] ?? '');
 $whatsapp = trim($datos['whatsapp'] ?? '');
 $montoMayorista = $datos['monto_minimo_mayorista'] ?? null;
 $moneda = strtoupper(trim($datos['moneda'] ?? ''));
+$mensajeEnvio = trim($datos['mensaje_envio'] ?? '');
 
 // Validar nombre
 if ($nombre === '' || mb_strlen($nombre) > 150) {
@@ -66,6 +67,18 @@ if (mb_strlen($whatsapp) > 30) {
     echo json_encode([
         'success' => false,
         'message' => 'El número de WhatsApp no puede superar 30 caracteres.'
+    ], JSON_UNESCAPED_UNICODE);
+
+    exit;
+}
+
+// Validar mensaje de envío
+if (mb_strlen($mensajeEnvio) > 500) {
+    http_response_code(400);
+
+    echo json_encode([
+        'success' => false,
+        'message' => 'El mensaje de envío no puede superar 500 caracteres.'
     ], JSON_UNESCAPED_UNICODE);
 
     exit;
@@ -118,14 +131,15 @@ try {
     $database = new Database();
     $conexion = $database->connect();
 
-    // Actualizar registro principal
+    // Actualizar configuración principal
     $sql = "
         UPDATE configuracion_tienda
         SET
             nombre_tienda = ?,
             whatsapp = ?,
             monto_minimo_mayorista = ?,
-            moneda = ?
+            moneda = ?,
+            mensaje_envio = ?
         WHERE id = 1
     ";
 
@@ -135,7 +149,8 @@ try {
         $nombre,
         $whatsapp !== '' ? $whatsapp : null,
         $montoMayorista,
-        $moneda
+        $moneda,
+        $mensajeEnvio !== '' ? $mensajeEnvio : null
     ]);
 
     echo json_encode([

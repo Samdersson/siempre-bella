@@ -235,6 +235,15 @@ function App() {
               }
             />
 
+            <Route
+                path="/tienda"
+                element={
+                    <StoreLayout>
+                        <Catalog />
+                    </StoreLayout>
+                }
+            />
+
           </Routes>
         </BrowserRouter>
       </WholesaleProvider>

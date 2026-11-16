@@ -1,93 +1,123 @@
 
 import { Link, NavLink } from "react-router-dom";
 import {
-  Search,
-  ShoppingBag,
-  UserRound,
-  Menu,
-  X
+    Search,
+    ShoppingBag,
+    UserRound,
+    Menu,
+    X
 } from "lucide-react";
-import { useState } from "react";
-import "../../styles/header.css";
+import { useEffect, useState } from "react";
+
+import { obtenerCategorias } from "../../services/api";
 import { useCart } from "../../context/CartContext";
 
-  const Header = () => {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const { totalUnidades } = useCart();
+import "../../styles/header.css";
 
-  // Categorías de demostración.
-  // Más adelante vendrán desde nuestra API PHP.
-  const categorias = [
-    { nombre: "Maquillaje", slug: "maquillaje" },
-    { nombre: "Accesorios", slug: "accesorios" },
-    { nombre: "Skincare", slug: "skincare" },
-    { nombre: "Varios", slug: "varios" }
-  ];
+const Header = () => {
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [categorias, setCategorias] = useState([]);
 
-  return (
-    <header className="header">
-      <div className="header-container">
+    const { totalUnidades } = useCart();
 
-        <Link to="/" className="logo">
-          <span>SIEMPRE</span>
-          <strong>BELLA</strong>
-        </Link>
+    useEffect(() => {
+        async function cargarCategorias() {
+            try {
+                const datos = await obtenerCategorias();
+                setCategorias(datos);
+            } catch (error) {
+                console.error("Error al cargar categorías:", error);
+            }
+        }
 
-        <button
-          className="menu-toggle"
-          onClick={() => setMenuOpen(!menuOpen)}
-          aria-label="Abrir menú"
-        >
-          {menuOpen ? <X /> : <Menu />}
-        </button>
+        cargarCategorias();
+    }, []);
 
-        <nav className={`navigation ${menuOpen ? "open" : ""}`}>
-          <NavLink to="/" onClick={() => setMenuOpen(false)}>
-            Inicio
-          </NavLink>
+    return (
+        <header className="header">
+            <div className="header-container">
 
-          {categorias.map((categoria) => (
-            <NavLink
-              key={categoria.slug}
-              to={`/categoria/${categoria.slug}`}
-              onClick={() => setMenuOpen(false)}
-            >
-              {categoria.nombre}
-            </NavLink>
-          ))}
+                <Link to="/" className="logo">
+                    <span>SIEMPRE</span>
+                    <strong>BELLA</strong>
+                </Link>
 
-          <NavLink to="/mayoristas" onClick={() => setMenuOpen(false)}>
-            Mayoristas
-          </NavLink>
-        </nav>
+                <button
+                    className="menu-toggle"
+                    onClick={() => setMenuOpen(!menuOpen)}
+                    aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"}
+                    aria-expanded={menuOpen}
+                >
+                    {menuOpen ? <X /> : <Menu />}
+                </button>
 
-        <div className="header-actions">
-          <button aria-label="Buscar productos">
-            <Search />
-          </button>
+                <nav className={`navigation ${menuOpen ? "open" : ""}`}>
 
-          <Link
-              to="/carrito"
-              className="header-cart-link"
-              aria-label={`Ver carrito. ${totalUnidades} productos`}
-          >
-              <ShoppingBag />
+                    <NavLink
+                        to="/"
+                        onClick={() => setMenuOpen(false)}
+                    >
+                        Inicio
+                    </NavLink>
 
-              {totalUnidades > 0 && (
-                  <span className="cart-count">
-                      {totalUnidades}
-                  </span>
-              )}
-          </Link>
+                    <NavLink
+                        to="/tienda"
+                        onClick={() => setMenuOpen(false)}
+                    >
+                        Tienda
+                    </NavLink>
 
-          <button aria-label="Mi cuenta">
-            <UserRound />
-          </button>
-        </div>
+                    {categorias.map((categoria) => (
+                        <NavLink
+                            key={categoria.id}
+                            to={`/categoria/${categoria.slug}`}
+                            onClick={() => setMenuOpen(false)}
+                        >
+                            {categoria.nombre}
+                        </NavLink>
+                    ))}
 
-      </div>
-    </header>
-  );
+                    <NavLink
+                        to="/mayoristas"
+                        onClick={() => setMenuOpen(false)}
+                    >
+                        Mayoristas
+                    </NavLink>
+
+                </nav>
+
+                <div className="header-actions">
+
+                    <Link
+                        to="/tienda"
+                        aria-label="Buscar productos"
+                    >
+                        <Search />
+                    </Link>
+
+                    <Link
+                        to="/carrito"
+                        className="header-cart-link"
+                        aria-label={`Ver carrito. ${totalUnidades} productos`}
+                    >
+                        <ShoppingBag />
+
+                        {totalUnidades > 0 && (
+                            <span className="cart-count">
+                                {totalUnidades}
+                            </span>
+                        )}
+                    </Link>
+
+                    <button aria-label="Mi cuenta" type="button">
+                        <UserRound />
+                    </button>
+
+                </div>
+
+            </div>
+        </header>
+    );
 };
 
 export default Header;

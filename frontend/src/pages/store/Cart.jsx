@@ -27,6 +27,7 @@ function Cart() {
   } = useCart();
 
   const [whatsapp, setWhatsapp] = useState("");
+  const [mensajeEnvio, setMensajeEnvio] = useState("");
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
 
@@ -45,6 +46,10 @@ function Cart() {
         }
 
         setWhatsapp(resultado.data.tienda?.whatsapp || "");
+        setMensajeEnvio(
+          resultado.data.tienda?.mensaje_envio ||
+          "El valor del envío se confirma directamente por WhatsApp."
+        );
       } catch (error) {
         console.error(error);
         setError("No fue posible cargar el contacto de la tienda.");
@@ -87,11 +92,15 @@ function Cart() {
       })
       .join("\n\n");
 
-    const mensaje =
-      `¡Hola, Siempre Bella! Quiero realizar el siguiente pedido:\n\n` +
-      `${detalle}\n\n` +
-      `TOTAL: ${formatoPrecio(total)}\n\n` +
-      `¿Me pueden confirmar disponibilidad, envío y medios de pago?`;
+    const mensaje = `¡Hola, Siempre Bella! Quiero realizar el siguiente pedido:
+
+    ${detalle}
+
+    TOTAL: ${formatoPrecio(total)}
+
+    ${mensajeEnvio}
+
+    ¿Me pueden confirmar disponibilidad y medios de pago?`;
 
     const url = `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`;
 
@@ -296,8 +305,7 @@ function Cart() {
               </div>
 
               <p className="cart-summary-note">
-                El envío y los medios de pago se coordinarán
-                directamente con la tienda por WhatsApp.
+                {mensajeEnvio}
               </p>
 
               {error && (

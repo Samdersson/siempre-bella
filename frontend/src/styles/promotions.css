@@ -118,3 +118,28 @@
         font-size: 18px;
     }
 }
+
+
+.promotion-add-button {
+    display: block;
+    width: 100%;
+    margin-top: 12px;
+    padding: 11px 16px;
+    border: none;
+    border-radius: 6px;
+    background: #e75491;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.promotion-add-button:hover:not(:disabled) {
+    background: #ce3978;
+}
+
+.promotion-add-button:disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+}

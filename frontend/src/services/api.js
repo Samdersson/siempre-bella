@@ -74,3 +74,97 @@ export async function obtenerPromociones() {
         throw error;
     }
 }
+
+
+export async function obtenerCategorias() {
+    try {
+        const respuesta = await fetch(
+            `${API_URL}/categorias/listar.php`
+        );
+
+        if (!respuesta.ok) {
+            throw new Error("Error al consultar las categorías");
+        }
+
+        const resultado = await respuesta.json();
+
+        if (!resultado.success) {
+            throw new Error("No se pudieron obtener las categorías");
+        }
+
+        return resultado.data;
+
+    } catch (error) {
+        console.error("Error en obtenerCategorias:", error);
+        throw error;
+    }
+}
+
+
+export async function obtenerCatalogo(filtros = {}) {
+    try {
+        const parametros = new URLSearchParams();
+
+        if (filtros.categoria) {
+            parametros.set("categoria", filtros.categoria);
+        }
+
+        if (filtros.buscar) {
+            parametros.set("buscar", filtros.buscar);
+        }
+
+        if (filtros.marca) {
+            parametros.set("marca", filtros.marca);
+        }
+
+        if (filtros.orden) {
+            parametros.set("orden", filtros.orden);
+        }
+
+        const respuesta = await fetch(
+            `${API_URL}/productos/catalogo.php?${parametros.toString()}`
+        );
+
+        if (!respuesta.ok) {
+            throw new Error("Error al consultar el catálogo");
+        }
+
+        const resultado = await respuesta.json();
+
+        if (!resultado.success) {
+            throw new Error("No se pudo obtener el catálogo");
+        }
+
+        return resultado.data;
+
+    } catch (error) {
+        console.error("Error en obtenerCatalogo:", error);
+        throw error;
+    }
+}
+
+
+export async function obtenerProductoPorSlug(slug) {
+    try {
+        const respuesta = await fetch(
+            `${API_URL}/productos/detalle.php?slug=${encodeURIComponent(slug)}`
+        );
+
+        if (!respuesta.ok) {
+            throw new Error("No fue posible consultar el producto");
+        }
+
+        const resultado = await respuesta.json();
+
+        if (!resultado.success) {
+            throw new Error("No se encontró el producto");
+        }
+
+        return resultado.data;
+
+    } catch (error) {
+        console.error("Error en obtenerProductoPorSlug:", error);
+        throw error;
+    }
+}
+

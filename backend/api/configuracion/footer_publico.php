@@ -17,7 +17,8 @@ try {
             nombre_tienda,
             whatsapp,
             monto_minimo_mayorista,
-            moneda
+            moneda,
+            mensaje_envio
         FROM configuracion_tienda
         WHERE id = 1
         LIMIT 1
