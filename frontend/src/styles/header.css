@@ -1,0 +1,146 @@
+
+.header {
+  width: 100%;
+  background: #ffffff;
+  border-bottom: 1px solid #f3e5eb;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-container {
+  max-width: 1280px;
+  min-height: 85px;
+  margin: 0 auto;
+  padding: 0 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
+}
+
+.logo {
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+  color: #d66b98;
+  line-height: 1;
+  letter-spacing: 2px;
+}
+
+.logo span {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.logo strong {
+  font-size: 25px;
+  letter-spacing: 3px;
+}
+
+.navigation {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.navigation a {
+  color: #494149;
+  font-size: 14px;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.navigation a:hover,
+.navigation a.active {
+  color: #d66b98;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.header-actions button,
+.header-actions a {
+  border: none;
+  background: transparent;
+  color: #494149;
+  cursor: pointer;
+  display: flex;
+  text-decoration: none;
+}
+
+.header-actions svg {
+  width: 21px;
+  height: 21px;
+}
+
+.menu-toggle {
+  display: none;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .header-container {
+    min-height: 72px;
+    padding: 0 18px;
+  }
+
+  .menu-toggle {
+    display: flex;
+  }
+
+  .navigation {
+    display: none;
+    position: absolute;
+    top: 72px;
+    left: 0;
+    width: 100%;
+    padding: 22px;
+    background: white;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 22px;
+    box-shadow: 0 8px 15px rgba(0,0,0,0.06);
+  }
+
+  .navigation.open {
+    display: flex;
+  }
+
+  .header-actions {
+    gap: 12px;
+  }
+
+  .header-actions button:last-child {
+    display: none;
+  }
+}
+
+.header-cart-link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cart-count {
+    position: absolute;
+    top: -9px;
+    right: -10px;
+    min-width: 19px;
+    height: 19px;
+    padding: 0 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #d65e98;
+    color: #fff;
+    border-radius: 50px;
+    font-size: 11px;
+    font-weight: 700;
+}
