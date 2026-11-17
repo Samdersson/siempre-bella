@@ -1,9 +1,12 @@
 
 <?php
 
-header("Content-Type: application/json; charset=utf-8");
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('X-Content-Type-Options: nosniff');
 
-require_once __DIR__ . "/../../config/database.php";
+require_once __DIR__ . '/../../config/database.php';
 
 /**
  * Excepción para errores de validación comercial.
@@ -14,21 +17,44 @@ class ErrorValidacionPedido extends RuntimeException {}
  * Responder al cliente en formato JSON.
  */
 function responder($success, $mensaje, $datos = [], $codigo = 200) {
-
     http_response_code($codigo);
 
     echo json_encode([
-        "success" => $success,
-        "message" => $mensaje,
-        "data" => $datos
+        'success' => $success,
+        'message' => $mensaje,
+        'data' => $datos
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
     exit;
 }
 
-// Solo aceptar POST.
-if ($_SERVER["REQUEST_METHOD"] !== "POST") {
-    responder(false, "Método no permitido.", [], 405);
+// --------------------------------------------------
+// 1. SOLO ACEPTAR POST
+// --------------------------------------------------
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header('Allow: POST');
+    responder(false, 'Método no permitido.', [], 405);
+}
+
+// --------------------------------------------------
+// 2. VALIDAR TIPO DE CONTENIDO
+// --------------------------------------------------
+
+$contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+
+if (stripos($contentType, 'application/json') !== 0) {
+    responder(false, 'El formato de la solicitud no es válido.', [], 415);
+}
+
+// --------------------------------------------------
+// 3. LIMITAR TAMAÑO DE LA SOLICITUD
+// --------------------------------------------------
+
+$longitud = (int) ($_SERVER['CONTENT_LENGTH'] ?? 0);
+
+if ($longitud > 65536) {
+    responder(false, 'La solicitud supera el tamaño permitido.', [], 413);
 }
 
 $connection = null;
@@ -36,35 +62,46 @@ $connection = null;
 try {
 
     // --------------------------------------------------
-    // 1. RECIBIR Y VALIDAR LOS DATOS
+    // 4. RECIBIR Y VALIDAR LOS DATOS
     // --------------------------------------------------
 
-    $contenido = file_get_contents("php://input");
+    $contenido = file_get_contents('php://input');
+
+    if ($contenido === false || trim($contenido) === '') {
+        responder(false, 'No se recibieron datos.', [], 400);
+    }
 
     $entrada = json_decode($contenido, true);
 
-    if (
-        json_last_error() !== JSON_ERROR_NONE ||
-        !is_array($entrada)
-    ) {
-        responder(false, "Los datos enviados no son válidos.", [], 400);
+    if (json_last_error() !== JSON_ERROR_NONE || !is_array($entrada)) {
+        responder(false, 'Los datos enviados no son válidos.', [], 400);
     }
 
-    // Datos del comprador.
-    $nombre = trim($entrada["nombre"] ?? "");
-    $telefono = trim($entrada["telefono"] ?? "");
-    $ciudad = trim($entrada["ciudad"] ?? "");
-    $items = $entrada["productos"] ?? null;
+    // Validar tipos antes de utilizar trim().
+    if (
+        !isset($entrada['nombre']) ||
+        !is_string($entrada['nombre']) ||
+        !isset($entrada['telefono']) ||
+        !is_string($entrada['telefono']) ||
+        !isset($entrada['ciudad']) ||
+        !is_string($entrada['ciudad'])
+    ) {
+        responder(false, 'Los datos del comprador no son válidos.', [], 400);
+    }
+
+    $nombre = trim($entrada['nombre']);
+    $telefono = trim($entrada['telefono']);
+    $ciudad = trim($entrada['ciudad']);
+    $items = $entrada['productos'] ?? null;
 
     // Validar nombre.
     if (
-        !is_string($nombre) ||
-        $nombre === "" ||
-        mb_strlen($nombre) > 150
+        $nombre === '' ||
+        mb_strlen($nombre, 'UTF-8') > 150
     ) {
         responder(
             false,
-            "Ingresa un nombre válido (máximo 150 caracteres).",
+            'Ingresa un nombre válido (máximo 150 caracteres).',
             [],
             400
         );
@@ -72,23 +109,21 @@ try {
 
     // Validar teléfono.
     if (
-        !is_string($telefono) ||
-        $telefono === "" ||
-        mb_strlen($telefono) > 40 ||
+        $telefono === '' ||
+        mb_strlen($telefono, 'UTF-8') > 40 ||
         !preg_match('/^[0-9+\s().-]{7,40}$/', $telefono)
     ) {
-        responder(false, "Ingresa un teléfono válido.", [], 400);
+        responder(false, 'Ingresa un teléfono válido.', [], 400);
     }
 
     // Validar ciudad.
     if (
-        !is_string($ciudad) ||
-        $ciudad === "" ||
-        mb_strlen($ciudad) > 120
+        $ciudad === '' ||
+        mb_strlen($ciudad, 'UTF-8') > 120
     ) {
         responder(
             false,
-            "Ingresa una ciudad válida (máximo 120 caracteres).",
+            'Ingresa una ciudad válida (máximo 120 caracteres).',
             [],
             400
         );
@@ -96,20 +131,20 @@ try {
 
     // Validar productos.
     if (!is_array($items) || count($items) === 0) {
-        responder(false, "El pedido no contiene productos.", [], 400);
+        responder(false, 'El pedido no contiene productos.', [], 400);
     }
 
     if (count($items) > 50) {
         responder(
             false,
-            "El pedido supera el máximo de productos permitido.",
+            'El pedido supera el máximo de productos permitido.',
             [],
             400
         );
     }
 
     // --------------------------------------------------
-    // 2. VALIDAR Y CONSOLIDAR CANTIDADES
+    // 5. VALIDAR Y CONSOLIDAR CANTIDADES
     // --------------------------------------------------
 
     $cantidades = [];
@@ -119,14 +154,14 @@ try {
         if (!is_array($item)) {
             responder(
                 false,
-                "La información de uno de los productos no es válida.",
+                'La información de uno de los productos no es válida.',
                 [],
                 400
             );
         }
 
-        $idRecibido = $item["id"] ?? null;
-        $cantidadRecibida = $item["cantidad"] ?? null;
+        $idRecibido = $item['id'] ?? null;
+        $cantidadRecibida = $item['cantidad'] ?? null;
 
         if (
             !is_scalar($idRecibido) ||
@@ -134,7 +169,7 @@ try {
         ) {
             responder(
                 false,
-                "Hay productos con identificadores o cantidades inválidas.",
+                'Hay productos con identificadores o cantidades inválidas.',
                 [],
                 400
             );
@@ -143,22 +178,22 @@ try {
         $id = filter_var(
             $idRecibido,
             FILTER_VALIDATE_INT,
-            ["options" => ["min_range" => 1]]
+            ['options' => ['min_range' => 1]]
         );
 
         $cantidad = filter_var(
             $cantidadRecibida,
             FILTER_VALIDATE_INT,
-            ["options" => [
-                "min_range" => 1,
-                "max_range" => 999
+            ['options' => [
+                'min_range' => 1,
+                'max_range' => 999
             ]]
         );
 
         if ($id === false || $cantidad === false) {
             responder(
                 false,
-                "Hay productos con identificadores o cantidades inválidas.",
+                'Hay productos con identificadores o cantidades inválidas.',
                 [],
                 400
             );
@@ -170,7 +205,7 @@ try {
         if ($cantidades[$id] > 999) {
             responder(
                 false,
-                "La cantidad máxima por producto es de 999 unidades.",
+                'La cantidad máxima por producto es de 999 unidades.',
                 [],
                 400
             );
@@ -178,16 +213,15 @@ try {
     }
 
     // --------------------------------------------------
-    // 3. CONECTAR A LA BASE DE DATOS
+    // 6. CONECTAR A LA BASE DE DATOS
     // --------------------------------------------------
 
     $database = new Database();
-
     $connection = $database->connect();
 
     if (!$connection instanceof PDO) {
         throw new RuntimeException(
-            "No fue posible establecer la conexión con la base de datos."
+            'No fue posible establecer la conexión con la base de datos.'
         );
     }
 
@@ -195,7 +229,7 @@ try {
     $connection->beginTransaction();
 
     // --------------------------------------------------
-    // 4. CONSULTAR CONFIGURACIÓN COMERCIAL
+    // 7. CONSULTAR CONFIGURACIÓN COMERCIAL
     // --------------------------------------------------
 
     $consultaConfiguracion = $connection->prepare("
@@ -215,27 +249,27 @@ try {
 
     if (!$configuracion) {
         throw new RuntimeException(
-            "No se encontró la configuración comercial."
+            'No se encontró la configuración comercial.'
         );
     }
 
-    $minimo = (float) $configuracion["monto_minimo_mayorista"];
+    $minimo = (float) $configuracion['monto_minimo_mayorista'];
 
-    if ($minimo <= 0) {
+    if (!is_finite($minimo) || $minimo <= 0) {
         throw new RuntimeException(
-            "El monto mínimo mayorista no está configurado correctamente."
+            'El monto mínimo mayorista no está configurado correctamente.'
         );
     }
 
     // --------------------------------------------------
-    // 5. CONSULTAR PRODUCTOS DIRECTAMENTE EN MARIADB
+    // 8. CONSULTAR PRODUCTOS DIRECTAMENTE EN MARIADB
     // --------------------------------------------------
 
     $ids = array_keys($cantidades);
 
     $marcadores = implode(
-        ",",
-        array_fill(0, count($ids), "?")
+        ',',
+        array_fill(0, count($ids), '?')
     );
 
     $sqlProductos = "
@@ -254,7 +288,6 @@ try {
     ";
 
     $consultaProductos = $connection->prepare($sqlProductos);
-
     $consultaProductos->execute($ids);
 
     $encontrados = $consultaProductos->fetchAll(PDO::FETCH_ASSOC);
@@ -263,47 +296,46 @@ try {
     $productosPorId = [];
 
     foreach ($encontrados as $producto) {
-        $productosPorId[(int) $producto["id"]] = $producto;
+        $productosPorId[(int) $producto['id']] = $producto;
     }
 
     // --------------------------------------------------
-    // 6. VALIDAR PRODUCTOS, PRECIOS Y DISPONIBILIDAD
+    // 9. VALIDAR PRODUCTOS, PRECIOS Y DISPONIBILIDAD
     // --------------------------------------------------
 
     $productosValidados = [];
-
     $subtotalPedido = 0;
 
     foreach ($cantidades as $id => $cantidad) {
 
         if (!isset($productosPorId[$id])) {
             throw new ErrorValidacionPedido(
-                "Uno de los productos del pedido ya no existe o su categoría está inactiva."
+                'Uno de los productos del pedido ya no existe o su categoría está inactiva.'
             );
         }
 
         $producto = $productosPorId[$id];
 
         // Comprobar que esté activo.
-        if ((int) $producto["activo"] !== 1) {
+        if ((int) $producto['activo'] !== 1) {
             throw new ErrorValidacionPedido(
-                "El producto " . $producto["nombre"] . " está inactivo."
+                'El producto ' . $producto['nombre'] . ' está inactivo.'
             );
         }
 
         // Comprobar disponibilidad.
-        if ($producto["disponibilidad"] !== "disponible") {
+        if ($producto['disponibilidad'] !== 'disponible') {
             throw new ErrorValidacionPedido(
-                "El producto " . $producto["nombre"] . " no está disponible."
+                'El producto ' . $producto['nombre'] . ' no está disponible.'
             );
         }
 
         // Consultar precio real desde la base de datos.
-        $precio = (float) $producto["precio_mayorista"];
+        $precio = (float) $producto['precio_mayorista'];
 
-        if ($precio <= 0) {
+        if (!is_finite($precio) || $precio <= 0) {
             throw new ErrorValidacionPedido(
-                "El producto " . $producto["nombre"] . " no tiene precio mayorista."
+                'El producto ' . $producto['nombre'] . ' no tiene precio mayorista válido.'
             );
         }
 
@@ -311,11 +343,11 @@ try {
         $subtotalProducto = round($precio * $cantidad, 2);
 
         $productosValidados[] = [
-            "id" => (int) $producto["id"],
-            "nombre" => $producto["nombre"],
-            "cantidad" => $cantidad,
-            "precio_unitario" => round($precio, 2),
-            "subtotal" => $subtotalProducto
+            'id' => (int) $producto['id'],
+            'nombre' => $producto['nombre'],
+            'cantidad' => $cantidad,
+            'precio_unitario' => round($precio, 2),
+            'subtotal' => $subtotalProducto
         ];
 
         $subtotalPedido += $subtotalProducto;
@@ -323,27 +355,33 @@ try {
 
     $subtotalPedido = round($subtotalPedido, 2);
 
-    // --------------------------------------------------
-    // 7. VALIDAR COMPRA MÍNIMA
-    // --------------------------------------------------
-
-    if ($subtotalPedido < $minimo) {
+    if (!is_finite($subtotalPedido)) {
         throw new ErrorValidacionPedido(
-            "El pedido no alcanza el mínimo mayorista. Total actual: " .
-            number_format($subtotalPedido, 2, ".", "")
+            'No fue posible calcular el total del pedido.'
         );
     }
 
     // --------------------------------------------------
-    // 8. GENERAR REFERENCIA ÚNICA
+    // 10. VALIDAR COMPRA MÍNIMA
     // --------------------------------------------------
 
-    $referencia = "SBM-" .
-        date("Ymd") . "-" .
+    if ($subtotalPedido < $minimo) {
+        throw new ErrorValidacionPedido(
+            'El pedido no alcanza el mínimo mayorista. Total actual: ' .
+            number_format($subtotalPedido, 2, '.', '')
+        );
+    }
+
+    // --------------------------------------------------
+    // 11. GENERAR REFERENCIA ÚNICA
+    // --------------------------------------------------
+
+    $referencia = 'SBM-' .
+        date('Ymd') . '-' .
         strtoupper(bin2hex(random_bytes(3)));
 
     // --------------------------------------------------
-    // 9. REGISTRAR CABECERA DEL PEDIDO
+    // 12. REGISTRAR CABECERA DEL PEDIDO
     // --------------------------------------------------
 
     $insertarPedido = $connection->prepare("
@@ -369,19 +407,19 @@ try {
     ");
 
     $insertarPedido->execute([
-        ":referencia" => $referencia,
-        ":nombre" => $nombre,
-        ":telefono" => $telefono,
-        ":ciudad" => $ciudad,
-        ":subtotal" => $subtotalPedido,
-        ":minimo" => $minimo,
-        ":moneda" => $configuracion["moneda"]
+        ':referencia' => $referencia,
+        ':nombre' => $nombre,
+        ':telefono' => $telefono,
+        ':ciudad' => $ciudad,
+        ':subtotal' => $subtotalPedido,
+        ':minimo' => $minimo,
+        ':moneda' => $configuracion['moneda']
     ]);
 
     $pedidoId = (int) $connection->lastInsertId();
 
     // --------------------------------------------------
-    // 10. REGISTRAR DETALLES DEL PEDIDO
+    // 13. REGISTRAR DETALLES DEL PEDIDO
     // --------------------------------------------------
 
     $insertarDetalle = $connection->prepare("
@@ -405,51 +443,77 @@ try {
     foreach ($productosValidados as $producto) {
 
         $insertarDetalle->execute([
-            ":pedido_id" => $pedidoId,
-            ":producto_id" => $producto["id"],
-            ":nombre_producto" => $producto["nombre"],
-            ":cantidad" => $producto["cantidad"],
-            ":precio_unitario" => $producto["precio_unitario"],
-            ":subtotal" => $producto["subtotal"]
+            ':pedido_id' => $pedidoId,
+            ':producto_id' => $producto['id'],
+            ':nombre_producto' => $producto['nombre'],
+            ':cantidad' => $producto['cantidad'],
+            ':precio_unitario' => $producto['precio_unitario'],
+            ':subtotal' => $producto['subtotal']
         ]);
     }
 
     // --------------------------------------------------
-    // 11. CONFIRMAR TRANSACCIÓN
+    // 14. REGISTRAR EVENTO INICIAL DEL HISTORIAL
+    // --------------------------------------------------
+
+    $insertarHistorial = $connection->prepare("
+        INSERT INTO historial_pedidos_mayoristas (
+            pedido_id,
+            estado_anterior,
+            estado_nuevo,
+            administrador_id,
+            administrador_nombre,
+            observacion
+        ) VALUES (
+            :pedido_id,
+            NULL,
+            :estado_nuevo,
+            NULL,
+            :administrador_nombre,
+            :observacion
+        )
+    ");
+
+    $insertarHistorial->execute([
+        ':pedido_id' => $pedidoId,
+        ':estado_nuevo' => 'pendiente',
+        ':administrador_nombre' => 'Sistema',
+        ':observacion' => 'Pedido mayorista recibido'
+    ]);
+
+    // --------------------------------------------------
+    // 15. CONFIRMAR TRANSACCIÓN
     // --------------------------------------------------
 
     $connection->commit();
 
     // --------------------------------------------------
-    // 12. DEVOLVER PEDIDO REGISTRADO
+    // 16. DEVOLVER PEDIDO REGISTRADO
     // --------------------------------------------------
 
     responder(
         true,
-        "Pedido mayorista registrado correctamente.",
+        'Pedido mayorista registrado correctamente.',
         [
-            "pedido_id" => $pedidoId,
-            "referencia" => $referencia,
-            "nombre" => $nombre,
-            "telefono" => $telefono,
-            "ciudad" => $ciudad,
-            "tienda" => $configuracion["nombre_tienda"],
-            "whatsapp" => $configuracion["whatsapp"],
-            "moneda" => $configuracion["moneda"],
-            "minimo_mayorista" => $minimo,
-            "subtotal" => $subtotalPedido,
-            "estado" => "pendiente",
-            "productos" => $productosValidados
+            'pedido_id' => $pedidoId,
+            'referencia' => $referencia,
+            'nombre' => $nombre,
+            'telefono' => $telefono,
+            'ciudad' => $ciudad,
+            'tienda' => $configuracion['nombre_tienda'],
+            'whatsapp' => $configuracion['whatsapp'],
+            'moneda' => $configuracion['moneda'],
+            'minimo_mayorista' => $minimo,
+            'subtotal' => $subtotalPedido,
+            'estado' => 'pendiente',
+            'productos' => $productosValidados
         ],
         201
     );
 
 } catch (Throwable $e) {
 
-    // --------------------------------------------------
-    // 13. REVERTIR TRANSACCIÓN SI OCURRE UN ERROR
-    // --------------------------------------------------
-
+    // Revertir transacción si ocurre un error.
     if (
         $connection instanceof PDO &&
         $connection->inTransaction()
@@ -457,9 +521,8 @@ try {
         $connection->rollBack();
     }
 
-    // Registrar el error en el log del servidor.
     error_log(
-        "Error registrando pedido mayorista: " . $e->getMessage()
+        'Error registrando pedido mayorista: ' . $e->getMessage()
     );
 
     // Errores comerciales o de validación.
@@ -475,7 +538,7 @@ try {
     // Errores internos del servidor.
     responder(
         false,
-        "No fue posible registrar el pedido. Intenta nuevamente.",
+        'No fue posible registrar el pedido. Intenta nuevamente.',
         [],
         500
     );

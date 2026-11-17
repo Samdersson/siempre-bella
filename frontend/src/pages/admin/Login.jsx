@@ -14,29 +14,63 @@ function Login() {
 
   const iniciarSesion = async (e) => {
     e.preventDefault();
+
+    if (cargando) return;
+
     setError("");
+
+    const correoNormalizado = email.trim().toLowerCase();
+
+    if (!correoNormalizado || !password) {
+      setError("Ingresa tu correo y contraseña.");
+      return;
+    }
+
     setCargando(true);
 
     try {
       const respuesta = await fetch("/api/auth/login.php", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "Accept": "application/json"
         },
         credentials: "include",
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({
+          email: correoNormalizado,
+          password
+        })
       });
 
-      const resultado = await respuesta.json();
+      // Comprobar que el servidor devuelva JSON.
+      const contenido = await respuesta.text();
+
+      let resultado;
+
+      try {
+        resultado = JSON.parse(contenido);
+      } catch {
+        throw new Error(
+          "El servidor devolvió una respuesta no válida. Intenta nuevamente."
+        );
+      }
 
       if (!respuesta.ok || !resultado.success) {
-        setError(resultado.message || "No fue posible iniciar sesión.");
+        setError(
+          resultado.message || "No fue posible iniciar sesión."
+        );
         return;
       }
 
-      navigate("/admin");
+      // Limpiar los campos después de autenticar.
+      setPassword("");
+
+      navigate("/admin", { replace: true });
+
     } catch (error) {
-      setError("No se pudo conectar con el servidor.");
+      setError(
+        error.message || "No se pudo conectar con el servidor."
+      );
     } finally {
       setCargando(false);
     }
@@ -45,17 +79,23 @@ function Login() {
   return (
     <div className="admin-login">
       <div className="admin-login-card">
+
         <img
-            src={logo}
-            alt="Siempre Bella"
-            className="admin-login-logo"
-            />
+          src={logo}
+          alt="Siempre Bella"
+          className="admin-login-logo"
+        />
 
         <h1>Panel administrativo</h1>
+
         <p>Ingresa tus credenciales para continuar.</p>
 
         <form onSubmit={iniciarSesion}>
-          <label htmlFor="email">Correo electrónico</label>
+
+          <label htmlFor="email">
+            Correo electrónico
+          </label>
+
           <input
             id="email"
             type="email"
@@ -63,10 +103,15 @@ function Login() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="admin@siemprebella.com"
             autoComplete="username"
+            maxLength={190}
             required
+            disabled={cargando}
           />
 
-          <label htmlFor="password">Contraseña</label>
+          <label htmlFor="password">
+            Contraseña
+          </label>
+
           <input
             id="password"
             type="password"
@@ -75,13 +120,28 @@ function Login() {
             placeholder="Ingresa tu contraseña"
             autoComplete="current-password"
             required
+            disabled={cargando}
           />
 
-          {error && <div className="admin-login-error">{error}</div>}
+          {error && (
+            <div
+              className="admin-login-error"
+              role="alert"
+              aria-live="polite"
+            >
+              {error}
+            </div>
+          )}
 
-          <button type="submit" disabled={cargando}>
-            {cargando ? "Ingresando..." : "Iniciar sesión"}
+          <button
+            type="submit"
+            disabled={cargando}
+          >
+            {cargando
+              ? "Ingresando..."
+              : "Iniciar sesión"}
           </button>
+
         </form>
       </div>
     </div>

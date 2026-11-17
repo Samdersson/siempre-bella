@@ -2,11 +2,13 @@
 <?php
 
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate');
+header('X-Content-Type-Options: nosniff');
 
 require_once __DIR__ . '/../../config/database.php';
-require_once __DIR__ . '/../../config/session.php';
+require_once __DIR__ . '/../../config/csrf.php';
 
-// 1. Validar método
+// 1. Validar método HTTP
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
 
@@ -18,30 +20,43 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// 2. Validar sesión
-if (!isset($_SESSION['admin'])) {
+// 2. Validar sesión administrativa
+if (
+    !isset($_SESSION['admin']) ||
+    !is_array($_SESSION['admin']) ||
+    !isset($_SESSION['admin']['id'])
+) {
     http_response_code(401);
 
     echo json_encode([
         'success' => false,
-        'message' => 'No autorizado.'
+        'message' => 'No autorizado. Inicia sesión nuevamente.'
     ], JSON_UNESCAPED_UNICODE);
 
     exit;
 }
 
-// 3. Validar categoría
+// 3. Validar token CSRF
+exigirTokenCSRF();
+
+// 4. Validar categoría e imagen
 $categoriaId = filter_var(
     $_POST['categoria_id'] ?? null,
     FILTER_VALIDATE_INT
 );
 
-if (!$categoriaId || $categoriaId < 1 || !isset($_FILES['imagen'])) {
+if (
+    $categoriaId === false ||
+    $categoriaId === null ||
+    $categoriaId < 1 ||
+    !isset($_FILES['imagen']) ||
+    !is_array($_FILES['imagen'])
+) {
     http_response_code(400);
 
     echo json_encode([
         'success' => false,
-        'message' => 'Selecciona una categoría y una imagen.'
+        'message' => 'Selecciona una categoría y una imagen válida.'
     ], JSON_UNESCAPED_UNICODE);
 
     exit;
@@ -49,8 +64,11 @@ if (!$categoriaId || $categoriaId < 1 || !isset($_FILES['imagen'])) {
 
 $archivo = $_FILES['imagen'];
 
-// 4. Validar recepción del archivo
-if ($archivo['error'] !== UPLOAD_ERR_OK) {
+// 5. Validar recepción del archivo
+if (
+    !isset($archivo['error'], $archivo['tmp_name'], $archivo['size']) ||
+    $archivo['error'] !== UPLOAD_ERR_OK
+) {
     http_response_code(400);
 
     echo json_encode([
@@ -61,18 +79,21 @@ if ($archivo['error'] !== UPLOAD_ERR_OK) {
     exit;
 }
 
-if (!is_uploaded_file($archivo['tmp_name'])) {
+if (
+    !is_uploaded_file($archivo['tmp_name']) ||
+    $archivo['size'] <= 0
+) {
     http_response_code(400);
 
     echo json_encode([
         'success' => false,
-        'message' => 'Archivo inválido.'
+        'message' => 'El archivo recibido no es válido.'
     ], JSON_UNESCAPED_UNICODE);
 
     exit;
 }
 
-// 5. Configuración
+// 6. Configuración
 $tiposPermitidos = [
     'image/jpeg',
     'image/png',
@@ -96,11 +117,11 @@ if ($archivo['size'] > $pesoMaximo) {
     exit;
 }
 
-// 6. Preparar directorio
+// 7. Preparar directorio
 $directorio = __DIR__ . '/../../uploads/categorias/';
 
 if (!is_dir($directorio)) {
-    if (!mkdir($directorio, 0755, true)) {
+    if (!mkdir($directorio, 0755, true) && !is_dir($directorio)) {
         http_response_code(500);
 
         echo json_encode([
@@ -124,11 +145,12 @@ if (!is_writable($directorio)) {
 }
 
 $nuevoArchivo = null;
-$conexion = null;
+$imagenOriginal = null;
+$imagenFinal = null;
 
 try {
 
-    // 7. Verificar GD y soporte WEBP
+    // 8. Verificar GD y soporte WEBP
     if (
         !extension_loaded('gd') ||
         !function_exists('imagewebp') ||
@@ -139,7 +161,7 @@ try {
         );
     }
 
-    // 8. Comprobar formato real
+    // 9. Comprobar formato real
     $finfo = new finfo(FILEINFO_MIME_TYPE);
     $mime = $finfo->file($archivo['tmp_name']);
 
@@ -149,7 +171,7 @@ try {
         );
     }
 
-    // 9. Comprobar dimensiones
+    // 10. Comprobar dimensiones
     $informacion = getimagesize($archivo['tmp_name']);
 
     if ($informacion === false) {
@@ -171,10 +193,16 @@ try {
         );
     }
 
-    // 10. Cargar imagen original
-    $imagenOriginal = imagecreatefromstring(
-        file_get_contents($archivo['tmp_name'])
-    );
+    // 11. Cargar imagen original
+    $contenido = file_get_contents($archivo['tmp_name']);
+
+    if ($contenido === false) {
+        throw new RuntimeException(
+            'No fue posible leer la imagen.'
+        );
+    }
+
+    $imagenOriginal = imagecreatefromstring($contenido);
 
     if ($imagenOriginal === false) {
         throw new RuntimeException(
@@ -182,7 +210,7 @@ try {
         );
     }
 
-    // 11. Calcular dimensiones conservando proporciones
+    // 12. Calcular dimensiones conservando proporciones
     $escala = min(
         1,
         $anchoMaximo / $anchoOriginal,
@@ -203,6 +231,12 @@ try {
         $nuevoAncho,
         $nuevoAlto
     );
+
+    if ($imagenFinal === false) {
+        throw new RuntimeException(
+            'No fue posible preparar la imagen.'
+        );
+    }
 
     // Conservar transparencia
     imagealphablending($imagenFinal, false);
@@ -231,7 +265,7 @@ try {
         $altoOriginal
     );
 
-    // 12. Generar archivo WEBP
+    // 13. Generar archivo WEBP
     $nombreArchivo = bin2hex(random_bytes(16)) . '.webp';
 
     $nuevoArchivo = $directorio . $nombreArchivo;
@@ -243,7 +277,10 @@ try {
     );
 
     imagedestroy($imagenOriginal);
+    $imagenOriginal = null;
+
     imagedestroy($imagenFinal);
+    $imagenFinal = null;
 
     if (
         !$convertida ||
@@ -255,14 +292,16 @@ try {
         );
     }
 
-    // 13. Conectar con MariaDB
+    // 14. Conectar con MariaDB
     $database = new Database();
     $conexion = $database->connect();
 
+    // Verificar categoría
     $consultaCategoria = $conexion->prepare(
         "SELECT id, imagen
          FROM categorias
-         WHERE id = ?"
+         WHERE id = ?
+         LIMIT 1"
     );
 
     $consultaCategoria->execute([$categoriaId]);
@@ -277,7 +316,7 @@ try {
 
     $imagenAnterior = $categoria['imagen'];
 
-    // 14. Actualizar ruta en base de datos
+    // 15. Actualizar ruta en base de datos
     $ruta = 'uploads/categorias/' . $nombreArchivo;
 
     $actualizar = $conexion->prepare(
@@ -291,7 +330,7 @@ try {
         $categoriaId
     ]);
 
-    // 15. Eliminar imagen anterior si ya no se utiliza
+    // 16. Eliminar imagen anterior si ya no se utiliza
     if (
         !empty($imagenAnterior) &&
         $imagenAnterior !== $ruta &&
@@ -306,6 +345,7 @@ try {
         $consultaUso->execute([$imagenAnterior]);
 
         if ((int)$consultaUso->fetchColumn() === 0) {
+
             $nombreAnterior = basename($imagenAnterior);
 
             $rutaAnterior = realpath(
@@ -325,6 +365,9 @@ try {
         }
     }
 
+    // La imagen ya está registrada correctamente
+    $nuevoArchivo = null;
+
     echo json_encode([
         'success' => true,
         'message' => 'Imagen de categoría actualizada correctamente.',
@@ -336,10 +379,6 @@ try {
 
 } catch (InvalidArgumentException $e) {
 
-    if ($nuevoArchivo && file_exists($nuevoArchivo)) {
-        unlink($nuevoArchivo);
-    }
-
     http_response_code(400);
 
     echo json_encode([
@@ -349,11 +388,9 @@ try {
 
 } catch (Throwable $e) {
 
-    if ($nuevoArchivo && file_exists($nuevoArchivo)) {
-        unlink($nuevoArchivo);
-    }
-
-    error_log($e->getMessage());
+    error_log(
+        'Error al subir imagen de categoría: ' . $e->getMessage()
+    );
 
     http_response_code(500);
 
@@ -361,4 +398,23 @@ try {
         'success' => false,
         'message' => 'No fue posible procesar la imagen de categoría.'
     ], JSON_UNESCAPED_UNICODE);
+
+} finally {
+
+    // Liberar recursos GD si ocurrió un error
+    if ($imagenOriginal !== null) {
+        imagedestroy($imagenOriginal);
+    }
+
+    if ($imagenFinal !== null) {
+        imagedestroy($imagenFinal);
+    }
+
+    // Eliminar archivo generado si no se completó el proceso
+    if (
+        $nuevoArchivo !== null &&
+        file_exists($nuevoArchivo)
+    ) {
+        unlink($nuevoArchivo);
+    }
 }

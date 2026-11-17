@@ -5,6 +5,7 @@ import { Plus, Pencil, Power, X, ImagePlus } from "lucide-react";
 import AdminLayout from "../../components/layout/AdminLayout.jsx";
 import "../../styles/admin-products.css";
 import "../../styles/admin-categories.css";
+import { obtenerHeadersCSRF } from "../../services/csrf.js";
 
 const formularioInicial = {
   nombre: "",
@@ -165,9 +166,9 @@ function Categories() {
 
       const respuesta = await fetch(endpoint, {
         method: "POST",
-        headers: {
+        headers: await obtenerHeadersCSRF({
           "Content-Type": "application/json"
-        },
+        }),
         credentials: "include",
         body: JSON.stringify(datos)
       });
@@ -201,6 +202,7 @@ function Categories() {
           {
             method: "POST",
             credentials: "include",
+            headers: await obtenerHeadersCSRF(),
             body: datosImagen
           }
         );
@@ -262,9 +264,9 @@ function Categories() {
         "/api/categorias/cambiar_estado.php",
         {
           method: "POST",
-          headers: {
+          headers: await obtenerHeadersCSRF({
             "Content-Type": "application/json"
-          },
+          }),
           credentials: "include",
           body: JSON.stringify({
             id: Number(categoria.id),

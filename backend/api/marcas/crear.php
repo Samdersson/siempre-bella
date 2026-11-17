@@ -2,32 +2,45 @@
 <?php
 
 require_once __DIR__ . '/../../config/database.php';
-require_once __DIR__ . '/../../config/session.php';
+require_once __DIR__ . '/../../config/csrf.php';
 
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate');
+header('Pragma: no-cache');
+header('X-Content-Type-Options: nosniff');
 
-if (!isset($_SESSION['admin'])) {
-    http_response_code(401);
-    echo json_encode([
-        'success' => false,
-        'message' => 'No autorizado.'
-    ]);
-    exit;
-}
-
+// Verificar método HTTP
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     echo json_encode([
         'success' => false,
         'message' => 'Método no permitido.'
-    ]);
+    ], JSON_UNESCAPED_UNICODE);
     exit;
 }
+
+// Verificar sesión administrativa
+if (
+    !isset($_SESSION['admin']) ||
+    !is_array($_SESSION['admin']) ||
+    !isset($_SESSION['admin']['id'])
+) {
+    http_response_code(401);
+    echo json_encode([
+        'success' => false,
+        'message' => 'No autorizado. Inicia sesión nuevamente.'
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+// Validar token CSRF
+exigirTokenCSRF();
 
 try {
     $database = new Database();
     $pdo = $database->connect();
 
+    // Leer y validar JSON
     $datos = json_decode(file_get_contents('php://input'), true);
 
     if (!is_array($datos)) {
@@ -35,11 +48,26 @@ try {
         echo json_encode([
             'success' => false,
             'message' => 'Los datos enviados no son válidos.'
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
-    $nombre = trim($datos['nombre'] ?? '');
+    // Validar tipos de datos
+    if (
+        !isset($datos['nombre']) ||
+        !is_string($datos['nombre']) ||
+        (isset($datos['descripcion']) && !is_string($datos['descripcion'])) ||
+        (isset($datos['activo']) && !in_array($datos['activo'], [0, 1, '0', '1'], true))
+    ) {
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Los campos enviados tienen un formato inválido.'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $nombre = trim($datos['nombre']);
     $descripcion = trim($datos['descripcion'] ?? '');
     $activo = isset($datos['activo']) ? (int)$datos['activo'] : 1;
 
@@ -49,25 +77,25 @@ try {
         echo json_encode([
             'success' => false,
             'message' => 'El nombre de la marca es obligatorio.'
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
-    if (mb_strlen($nombre) > 120) {
+    if (mb_strlen($nombre, 'UTF-8') > 120) {
         http_response_code(400);
         echo json_encode([
             'success' => false,
             'message' => 'El nombre no puede superar los 120 caracteres.'
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
-    if (mb_strlen($descripcion) > 255) {
+    if (mb_strlen($descripcion, 'UTF-8') > 255) {
         http_response_code(400);
         echo json_encode([
             'success' => false,
             'message' => 'La descripción no puede superar los 255 caracteres.'
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
@@ -76,7 +104,7 @@ try {
         echo json_encode([
             'success' => false,
             'message' => 'El estado seleccionado no es válido.'
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
@@ -84,19 +112,25 @@ try {
     $consulta = $pdo->prepare(
         "SELECT id FROM marcas WHERE nombre = :nombre LIMIT 1"
     );
+
     $consulta->execute(['nombre' => $nombre]);
 
-    if ($consulta->fetch()) {
+    if ($consulta->fetch(PDO::FETCH_ASSOC)) {
         http_response_code(409);
         echo json_encode([
             'success' => false,
             'message' => 'Ya existe una marca con ese nombre.'
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
     // Generar slug
     $slugBase = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $nombre);
+
+    if ($slugBase === false) {
+        throw new RuntimeException('No fue posible procesar el nombre.');
+    }
+
     $slugBase = strtolower($slugBase);
     $slugBase = preg_replace('/[^a-z0-9]+/', '-', $slugBase);
     $slugBase = trim($slugBase, '-');
@@ -106,25 +140,36 @@ try {
         echo json_encode([
             'success' => false,
             'message' => 'No fue posible generar el identificador de la marca.'
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
-    $slug = substr($slugBase, 0, 140);
+    $slugBase = substr($slugBase, 0, 140);
+    $slug = $slugBase;
     $contador = 1;
 
-    while (true) {
+    // Garantizar que el slug sea único
+    while ($contador <= 10000) {
         $consulta = $pdo->prepare(
             "SELECT id FROM marcas WHERE slug = :slug LIMIT 1"
         );
+
         $consulta->execute(['slug' => $slug]);
 
-        if (!$consulta->fetch()) {
+        if (!$consulta->fetch(PDO::FETCH_ASSOC)) {
             break;
         }
 
         $sufijo = '-' . $contador++;
-        $slug = substr($slugBase, 0, 140 - strlen($sufijo)) . $sufijo;
+        $slug = substr(
+            $slugBase,
+            0,
+            140 - strlen($sufijo)
+        ) . $sufijo;
+    }
+
+    if ($contador > 10000) {
+        throw new RuntimeException('No fue posible generar un slug único.');
     }
 
     // Registrar marca
@@ -134,6 +179,7 @@ try {
                 (:nombre, :slug, :descripcion, :activo)";
 
     $stmt = $pdo->prepare($sql);
+
     $stmt->execute([
         'nombre' => $nombre,
         'slug' => $slug,
@@ -144,6 +190,7 @@ try {
     $marcaId = (int)$pdo->lastInsertId();
 
     http_response_code(201);
+
     echo json_encode([
         'success' => true,
         'message' => 'Marca creada correctamente.',
@@ -152,18 +199,24 @@ try {
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (PDOException $e) {
+
+    error_log('Error al crear marca: ' . $e->getMessage());
+
     http_response_code(500);
+
     echo json_encode([
         'success' => false,
-        'message' => 'Error al registrar la marca.',
-        'error' => $e->getMessage()
+        'message' => 'Error al registrar la marca.'
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {
+
+    error_log('Error inesperado al crear marca: ' . $e->getMessage());
+
     http_response_code(500);
+
     echo json_encode([
         'success' => false,
-        'message' => 'Ocurrió un error inesperado.',
-        'error' => $e->getMessage()
+        'message' => 'Ocurrió un error inesperado al registrar la marca.'
     ], JSON_UNESCAPED_UNICODE);
 }

@@ -2,11 +2,13 @@
 <?php
 
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate');
+header('X-Content-Type-Options: nosniff');
 
 require_once __DIR__ . '/../../config/database.php';
-require_once __DIR__ . '/../../config/session.php';
+require_once __DIR__ . '/../../config/csrf.php';
 
-// Validar método
+// 1. Validar método HTTP
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
 
@@ -18,19 +20,26 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// Validar sesión administrativa
-if (!isset($_SESSION['admin'])) {
+// 2. Validar sesión administrativa
+if (
+    !isset($_SESSION['admin']) ||
+    !is_array($_SESSION['admin']) ||
+    !isset($_SESSION['admin']['id'])
+) {
     http_response_code(401);
 
     echo json_encode([
         'success' => false,
-        'message' => 'No autorizado.'
+        'message' => 'No autorizado. Inicia sesión nuevamente.'
     ], JSON_UNESCAPED_UNICODE);
 
     exit;
 }
 
-// Recibir datos
+// 3. Validar token CSRF
+exigirTokenCSRF();
+
+// 4. Recibir datos JSON
 $datos = json_decode(file_get_contents('php://input'), true);
 
 if (!is_array($datos)) {
@@ -44,14 +53,30 @@ if (!is_array($datos)) {
     exit;
 }
 
-$nombre = trim($datos['nombre'] ?? '');
+// 5. Validar tipos de datos
+if (
+    !isset($datos['nombre']) ||
+    !is_string($datos['nombre']) ||
+    (isset($datos['descripcion']) && !is_string($datos['descripcion']))
+) {
+    http_response_code(400);
+
+    echo json_encode([
+        'success' => false,
+        'message' => 'Los datos de la categoría no son válidos.'
+    ], JSON_UNESCAPED_UNICODE);
+
+    exit;
+}
+
+$nombre = trim($datos['nombre']);
 $descripcion = trim($datos['descripcion'] ?? '');
 
 $activo = isset($datos['activo'])
     ? filter_var($datos['activo'], FILTER_VALIDATE_INT)
     : 1;
 
-// Validar nombre
+// 6. Validar nombre
 if ($nombre === '' || mb_strlen($nombre, 'UTF-8') > 100) {
     http_response_code(400);
 
@@ -63,7 +88,7 @@ if ($nombre === '' || mb_strlen($nombre, 'UTF-8') > 100) {
     exit;
 }
 
-// Validar descripción
+// 7. Validar descripción
 if (mb_strlen($descripcion, 'UTF-8') > 255) {
     http_response_code(400);
 
@@ -75,8 +100,12 @@ if (mb_strlen($descripcion, 'UTF-8') > 255) {
     exit;
 }
 
-// Validar estado
-if (!in_array($activo, [0, 1], true)) {
+// 8. Validar estado
+if (
+    $activo === false ||
+    $activo === null ||
+    !in_array($activo, [0, 1], true)
+) {
     http_response_code(400);
 
     echo json_encode([
@@ -87,17 +116,24 @@ if (!in_array($activo, [0, 1], true)) {
     exit;
 }
 
-// Generar slug
+// 9. Generar slug
 function generarSlugCategoria(string $texto): string
 {
     $texto = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $texto);
+
+    if ($texto === false) {
+        return '';
+    }
+
     $texto = strtolower($texto);
     $texto = preg_replace('/[^a-z0-9]+/', '-', $texto);
 
     return trim($texto, '-');
 }
 
+// 10. Registrar categoría
 try {
+
     $database = new Database();
     $conexion = $database->connect();
 
@@ -114,10 +150,14 @@ try {
     $contador = 1;
 
     $consultaSlug = $conexion->prepare(
-        "SELECT id FROM categorias WHERE slug = ? LIMIT 1"
+        "SELECT id
+         FROM categorias
+         WHERE slug = ?
+         LIMIT 1"
     );
 
     while (true) {
+
         $consultaSlug->execute([$slug]);
 
         if (!$consultaSlug->fetch()) {
@@ -126,9 +166,15 @@ try {
 
         $slug = $slugBase . '-' . $contador;
         $contador++;
+
+        if ($contador > 10000) {
+            throw new RuntimeException(
+                'No fue posible generar un slug único.'
+            );
+        }
     }
 
-    // Registrar categoría
+    // Insertar categoría
     $consulta = $conexion->prepare(
         "INSERT INTO categorias (
             nombre,
@@ -148,11 +194,12 @@ try {
     echo json_encode([
         'success' => true,
         'message' => 'Categoría registrada correctamente.',
-        'categoria_id' => $conexion->lastInsertId(),
+        'categoria_id' => (int)$conexion->lastInsertId(),
         'slug' => $slug
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (InvalidArgumentException $e) {
+
     http_response_code(400);
 
     echo json_encode([
@@ -161,7 +208,10 @@ try {
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {
-    error_log($e->getMessage());
+
+    error_log(
+        'Error al registrar categoría: ' . $e->getMessage()
+    );
 
     http_response_code(500);
 

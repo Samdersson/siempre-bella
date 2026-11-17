@@ -17,6 +17,7 @@ import {
 
 import AdminLayout from "../../components/layout/AdminLayout.jsx";
 import "../../styles/banners.css";
+import { obtenerHeadersCSRF } from "../../services/csrf.js";
 
 const API = "/api/banners";
 const API_MULTIMEDIA = "/api/multimedia";
@@ -231,9 +232,9 @@ function Banners() {
       const respuesta = await fetch(endpoint, {
         method: "POST",
         credentials: "include",
-        headers: {
+        headers: await obtenerHeadersCSRF({
           "Content-Type": "application/json"
-        },
+        }),
         body: JSON.stringify(datos)
       });
 
@@ -278,9 +279,9 @@ function Banners() {
       const respuesta = await fetch(`${API}/cambiar_estado.php`, {
         method: "POST",
         credentials: "include",
-        headers: {
+        headers: await obtenerHeadersCSRF({
           "Content-Type": "application/json"
-        },
+        }),
         body: JSON.stringify({
           id: Number(banner.id),
           activo: nuevoEstado
@@ -312,9 +313,9 @@ function Banners() {
       const respuesta = await fetch(`${API}/eliminar.php`, {
         method: "POST",
         credentials: "include",
-        headers: {
+        headers: await obtenerHeadersCSRF({
           "Content-Type": "application/json"
-        },
+        }),
         body: JSON.stringify({
           id: Number(banner.id)
         })

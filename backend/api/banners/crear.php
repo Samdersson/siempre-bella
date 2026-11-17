@@ -2,23 +2,13 @@
 <?php
 
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate');
+header('X-Content-Type-Options: nosniff');
 
 require_once __DIR__ . '/../../config/database.php';
-require_once __DIR__ . '/../../config/session.php';
+require_once __DIR__ . '/../../config/csrf.php';
 
-// Verificar sesión administrativa
-if (!isset($_SESSION['admin'])) {
-    http_response_code(401);
-
-    echo json_encode([
-        'success' => false,
-        'message' => 'No autorizado.'
-    ], JSON_UNESCAPED_UNICODE);
-
-    exit;
-}
-
-// Verificar método HTTP
+// 1. Verificar método HTTP
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
 
@@ -30,7 +20,26 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// Recibir datos JSON
+// 2. Verificar sesión administrativa
+if (
+    !isset($_SESSION['admin']) ||
+    !is_array($_SESSION['admin']) ||
+    !isset($_SESSION['admin']['id'])
+) {
+    http_response_code(401);
+
+    echo json_encode([
+        'success' => false,
+        'message' => 'No autorizado. Inicia sesión nuevamente.'
+    ], JSON_UNESCAPED_UNICODE);
+
+    exit;
+}
+
+// 3. Validar token CSRF
+exigirTokenCSRF();
+
+// 4. Recibir datos JSON
 $datos = json_decode(file_get_contents('php://input'), true);
 
 if (!is_array($datos)) {
@@ -44,7 +53,7 @@ if (!is_array($datos)) {
     exit;
 }
 
-// Obtener y limpiar datos
+// 5. Obtener y limpiar datos
 $nombre = trim($datos['nombre'] ?? '');
 $titulo = trim($datos['titulo'] ?? '');
 $subtitulo = trim($datos['subtitulo'] ?? '');
@@ -84,7 +93,7 @@ $fechaFin = $datos['fecha_fin'] ?? null;
 $fechaInicio = ($fechaInicio === '') ? null : $fechaInicio;
 $fechaFin = ($fechaFin === '') ? null : $fechaFin;
 
-// Validar nombre
+// 6. Validar nombre
 if ($nombre === '' || mb_strlen($nombre) > 150) {
     http_response_code(400);
 
@@ -132,7 +141,7 @@ if ($enlaceBoton !== '' && mb_strlen($enlaceBoton) > 500) {
     exit;
 }
 
-// Validar imagen principal
+// 7. Validar imagen principal
 if (!$imagenId || $imagenId <= 0) {
     http_response_code(400);
 
@@ -147,7 +156,7 @@ if (!$imagenId || $imagenId <= 0) {
 // Validar imagen móvil
 if (
     $imagenMovilId !== null &&
-    (!$imagenMovilId || $imagenMovilId <= 0)
+    ($imagenMovilId === false || $imagenMovilId <= 0)
 ) {
     http_response_code(400);
 
@@ -159,7 +168,7 @@ if (
     exit;
 }
 
-// Validar posición
+// 8. Validar posición
 $posicionesPermitidas = [
     'principal',
     'secundario',
@@ -177,7 +186,7 @@ if (!in_array($posicion, $posicionesPermitidas, true)) {
     exit;
 }
 
-// Validar orden
+// 9. Validar orden
 if ($orden === false || $orden === null) {
     $orden = null;
 } elseif ($orden < 0) {
@@ -191,7 +200,7 @@ if ($orden === false || $orden === null) {
     exit;
 }
 
-// Validar formato de fechas
+// 10. Validar formato de fechas
 function validarFechaBanner($fecha): bool
 {
     if ($fecha === null) {
@@ -240,12 +249,13 @@ if (
     exit;
 }
 
+// 11. Registrar banner
 try {
 
     $database = new Database();
     $conexion = $database->connect();
 
-    // Verificar que la imagen principal exista y esté activa
+    // Verificar imagen principal
     $consultaImagen = $conexion->prepare(
         "SELECT id
          FROM recursos_multimedia
@@ -261,7 +271,7 @@ try {
         );
     }
 
-    // Verificar imagen móvil cuando se haya seleccionado
+    // Verificar imagen móvil
     if ($imagenMovilId !== null) {
 
         if ($imagenMovilId === $imagenId) {
@@ -300,7 +310,7 @@ try {
         $orden = (int)$consultaOrden->fetchColumn();
     }
 
-    // Registrar banner
+    // Insertar banner
     $sql = "
         INSERT INTO banners (
             nombre,
@@ -338,6 +348,7 @@ try {
 
     $bannerId = (int)$conexion->lastInsertId();
 
+    // Respuesta exitosa
     echo json_encode([
         'success' => true,
         'message' => 'Banner creado correctamente.',

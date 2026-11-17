@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Pencil, Power, X, ImagePlus } from "lucide-react";
 import AdminLayout from "../../components/layout/AdminLayout.jsx";
+import { obtenerHeadersCSRF } from "../../services/csrf.js";
 import "../../styles/admin-products.css";
 import "../../styles/admin-categories.css";
 
@@ -163,9 +164,9 @@ function Brands() {
 
       const respuesta = await fetch(endpoint, {
         method: "POST",
-        headers: {
+        headers: await obtenerHeadersCSRF({
           "Content-Type": "application/json"
-        },
+        }),
         credentials: "include",
         body: JSON.stringify(datos)
       });
@@ -201,6 +202,7 @@ function Brands() {
           "/api/marcas/subir_logo.php",
           {
             method: "POST",
+            headers: await obtenerHeadersCSRF(),
             credentials: "include",
             body: datosLogo
           }
@@ -264,9 +266,9 @@ function Brands() {
         "/api/marcas/cambiar_estado.php",
         {
           method: "POST",
-          headers: {
+          headers: await obtenerHeadersCSRF({
             "Content-Type": "application/json"
-          },
+          }),
           credentials: "include",
           body: JSON.stringify({
             id: Number(marca.id),

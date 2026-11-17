@@ -2,23 +2,13 @@
 <?php
 
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate');
+header('X-Content-Type-Options: nosniff');
 
 require_once __DIR__ . '/../../config/database.php';
-require_once __DIR__ . '/../../config/session.php';
+require_once __DIR__ . '/../../config/csrf.php';
 
-// Verificar sesión administrativa
-if (!isset($_SESSION['admin'])) {
-    http_response_code(401);
-
-    echo json_encode([
-        'success' => false,
-        'message' => 'No autorizado.'
-    ], JSON_UNESCAPED_UNICODE);
-
-    exit;
-}
-
-// Verificar método HTTP
+// 1. Verificar método HTTP
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
 
@@ -30,7 +20,26 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// Recibir datos
+// 2. Verificar sesión administrativa
+if (
+    !isset($_SESSION['admin']) ||
+    !is_array($_SESSION['admin']) ||
+    !isset($_SESSION['admin']['id'])
+) {
+    http_response_code(401);
+
+    echo json_encode([
+        'success' => false,
+        'message' => 'No autorizado. Inicia sesión nuevamente.'
+    ], JSON_UNESCAPED_UNICODE);
+
+    exit;
+}
+
+// 3. Validar token CSRF
+exigirTokenCSRF();
+
+// 4. Recibir datos
 $datos = json_decode(file_get_contents('php://input'), true);
 
 if (!is_array($datos)) {
@@ -45,17 +54,24 @@ if (!is_array($datos)) {
 }
 
 $accion = $datos['accion'] ?? '';
+
 $productoId = filter_var(
     $datos['producto_id'] ?? null,
     FILTER_VALIDATE_INT
 );
+
 $imagenId = filter_var(
     $datos['imagen_id'] ?? null,
     FILTER_VALIDATE_INT
 );
 
-// Validar identificadores
-if (!$productoId || $productoId <= 0 || !$imagenId || $imagenId <= 0) {
+// 5. Validar identificadores
+if (
+    !$productoId ||
+    $productoId <= 0 ||
+    !$imagenId ||
+    $imagenId <= 0
+) {
     http_response_code(400);
 
     echo json_encode([
@@ -77,11 +93,13 @@ if (!in_array($accion, ['eliminar', 'principal'], true)) {
     exit;
 }
 
+$conexion = null;
+
 try {
     $database = new Database();
     $conexion = $database->connect();
 
-    // Buscar imagen y verificar que pertenezca al producto
+    // 6. Buscar imagen y verificar que pertenezca al producto
     $consultaImagen = $conexion->prepare(
         "SELECT id, producto_id, ruta, es_principal
          FROM producto_imagenes
@@ -89,7 +107,10 @@ try {
          LIMIT 1"
     );
 
-    $consultaImagen->execute([$imagenId, $productoId]);
+    $consultaImagen->execute([
+        $imagenId,
+        $productoId
+    ]);
 
     $imagen = $consultaImagen->fetch(PDO::FETCH_ASSOC);
 
@@ -104,11 +125,12 @@ try {
         exit;
     }
 
-    // CAMBIAR IMAGEN PRINCIPAL
+    // 7. CAMBIAR IMAGEN PRINCIPAL
     if ($accion === 'principal') {
+
         $conexion->beginTransaction();
 
-        // Quitar la condición de principal a las demás imágenes
+        // Quitar condición de principal a las demás imágenes
         $actualizarTodas = $conexion->prepare(
             "UPDATE producto_imagenes
              SET es_principal = 0
@@ -139,11 +161,12 @@ try {
         exit;
     }
 
-    // ELIMINAR IMAGEN
+    // 8. ELIMINAR IMAGEN
     if ($accion === 'eliminar') {
+
         $conexion->beginTransaction();
 
-        // Eliminar el registro de la imagen
+        // Eliminar registro de imagen
         $eliminar = $conexion->prepare(
             "DELETE FROM producto_imagenes
              WHERE id = ? AND producto_id = ?"
@@ -154,7 +177,7 @@ try {
             $productoId
         ]);
 
-        // Consultar las imágenes restantes
+        // Consultar imágenes restantes
         $consultaRestantes = $conexion->prepare(
             "SELECT id
              FROM producto_imagenes
@@ -166,8 +189,9 @@ try {
 
         $restantes = $consultaRestantes->fetchAll(PDO::FETCH_ASSOC);
 
-        // Si quedan imágenes, elegir una principal cuando sea necesario
+        // Si quedan imágenes, verificar que exista una principal
         if (count($restantes) > 0) {
+
             $consultaPrincipal = $conexion->prepare(
                 "SELECT id
                  FROM producto_imagenes
@@ -178,6 +202,7 @@ try {
             $consultaPrincipal->execute([$productoId]);
 
             if (!$consultaPrincipal->fetch()) {
+
                 $nuevaPrincipalId = $restantes[0]['id'];
 
                 $actualizarPrincipal = $conexion->prepare(
@@ -193,7 +218,7 @@ try {
             }
         }
 
-        // Verificar que el archivo no esté asociado a otro registro
+        // Verificar si el archivo sigue asociado a otro registro
         $consultaUso = $conexion->prepare(
             "SELECT COUNT(*)
              FROM producto_imagenes
@@ -204,26 +229,42 @@ try {
 
         $archivoEnUso = (int)$consultaUso->fetchColumn() > 0;
 
+        // Confirmar cambios en la base de datos
         $conexion->commit();
 
-        // Eliminar archivo físico únicamente si ya no está en uso
+        // Eliminar archivo físico únicamente si no está en uso
         if (!$archivoEnUso) {
-            $rutaRelativa = str_replace('\\', '/', $imagen['ruta']);
 
-            $directorio = realpath(__DIR__ . '/../../uploads/productos');
+            $rutaRelativa = str_replace(
+                '\\',
+                '/',
+                $imagen['ruta']
+            );
+
+            $directorio = realpath(
+                __DIR__ . '/../../uploads/productos'
+            );
 
             if (
                 $directorio !== false &&
-                str_starts_with($rutaRelativa, 'uploads/productos/')
+                str_starts_with(
+                    $rutaRelativa,
+                    'uploads/productos/'
+                )
             ) {
+
                 $nombreArchivo = basename($rutaRelativa);
-                $rutaArchivo = realpath($directorio . DIRECTORY_SEPARATOR . $nombreArchivo);
+
+                $rutaArchivo = realpath(
+                    $directorio . DIRECTORY_SEPARATOR . $nombreArchivo
+                );
 
                 if (
                     $rutaArchivo !== false &&
                     is_file($rutaArchivo) &&
                     dirname($rutaArchivo) === $directorio
                 ) {
+
                     if (!unlink($rutaArchivo)) {
                         error_log(
                             'No fue posible eliminar el archivo: ' . $rutaArchivo
@@ -244,7 +285,7 @@ try {
 
 } catch (Throwable $e) {
 
-    if (isset($conexion) && $conexion->inTransaction()) {
+    if ($conexion && $conexion->inTransaction()) {
         $conexion->rollBack();
     }
 

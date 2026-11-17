@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -12,6 +13,8 @@ import {
   Globe,
 } from "lucide-react";
 import AdminLayout from "../../components/layout/AdminLayout.jsx";
+import { obtenerHeadersCSRF } from "../../services/csrf.js";
+
 import "../../styles/admin-products.css";
 import "../../styles/admin-categories.css";
 import "../../styles/admin-configuration.css";
@@ -50,7 +53,13 @@ function Configuration() {
 
   // Manejo de respuestas y sesión
   const procesarRespuesta = async (respuesta) => {
-    const resultado = await respuesta.json();
+    let resultado;
+
+    try {
+      resultado = await respuesta.json();
+    } catch {
+      throw new Error("El servidor devolvió una respuesta no válida.");
+    }
 
     if (respuesta.status === 401) {
       navigate("/admin/login", { replace: true });
@@ -131,9 +140,9 @@ function Configuration() {
     try {
       const respuesta = await fetch("/api/configuracion/actualizar.php", {
         method: "POST",
-        headers: {
+        headers: await obtenerHeadersCSRF({
           "Content-Type": "application/json",
-        },
+        }),
         credentials: "include",
         body: JSON.stringify({
           ...tienda,
@@ -148,7 +157,8 @@ function Configuration() {
       if (!resultado) return;
 
       setMensaje(
-        resultado.message || "Información de la tienda actualizada correctamente."
+        resultado.message ||
+          "Información de la tienda actualizada correctamente."
       );
     } catch (error) {
       setError(error.message);
@@ -160,10 +170,12 @@ function Configuration() {
   // Abrir formulario de nueva red
   const abrirNuevaRed = () => {
     setRedEditar(null);
+
     setFormularioRed({
       ...redInicial,
       orden: redes.length + 1,
     });
+
     setError("");
     setMensaje("");
     setModalAbierto(true);
@@ -210,9 +222,9 @@ function Configuration() {
           : "/api/configuracion/redes_crear.php",
         {
           method: "POST",
-          headers: {
+          headers: await obtenerHeadersCSRF({
             "Content-Type": "application/json",
-          },
+          }),
           credentials: "include",
           body: JSON.stringify(
             esEdicion
@@ -259,6 +271,7 @@ function Configuration() {
     );
 
     const resultado = await procesarRespuesta(respuesta);
+
     if (resultado) {
       setRedes(resultado.data || []);
     }
@@ -285,9 +298,9 @@ function Configuration() {
         "/api/configuracion/redes_cambiar_estado.php",
         {
           method: "POST",
-          headers: {
+          headers: await obtenerHeadersCSRF({
             "Content-Type": "application/json",
-          },
+          }),
           credentials: "include",
           body: JSON.stringify({
             id: Number(red.id),
@@ -328,9 +341,9 @@ function Configuration() {
         "/api/configuracion/redes_eliminar.php",
         {
           method: "POST",
-          headers: {
+          headers: await obtenerHeadersCSRF({
             "Content-Type": "application/json",
-          },
+          }),
           credentials: "include",
           body: JSON.stringify({
             id: Number(red.id),
@@ -363,11 +376,19 @@ function Configuration() {
   };
 
   const obtenerIconoRed = (plataforma) => {
-    const nombre = plataforma.toLowerCase();
+    const nombre = (plataforma || "").toLowerCase();
 
-    if (nombre.includes("instagram")) return <Instagram size={20} />;
-    if (nombre.includes("facebook")) return <Facebook size={20} />;
-    if (nombre.includes("tiktok")) return <Music2 size={20} />;
+    if (nombre.includes("instagram")) {
+      return <Instagram size={20} />;
+    }
+
+    if (nombre.includes("facebook")) {
+      return <Globe size={20} />;
+    }
+
+    if (nombre.includes("tiktok")) {
+      return <Music2 size={20} />;
+    }
 
     return <Globe size={20} />;
   };
@@ -417,6 +438,7 @@ function Configuration() {
                 <div className="configuration-section-icon">
                   <Store size={21} />
                 </div>
+
                 <div>
                   <h2>Información de la tienda</h2>
                   <p>
@@ -435,6 +457,7 @@ function Configuration() {
                     <label htmlFor="tienda-nombre">
                       Nombre de la tienda *
                     </label>
+
                     <input
                       id="tienda-nombre"
                       name="nombre_tienda"
@@ -445,8 +468,9 @@ function Configuration() {
                       required
                       disabled={guardandoTienda}
                     />
+                  </div>
 
-                    <div className="category-form-field">
+                  <div className="category-form-field">
                     <label htmlFor="tienda-mensaje-envio">
                       Mensaje sobre los envíos
                     </label>
@@ -463,16 +487,16 @@ function Configuration() {
                     />
 
                     <small>
-                      Este mensaje se mostrará en el carrito. Máximo 500 caracteres.
-                      ({tienda.mensaje_envio.length}/500)
+                      Este mensaje se mostrará en el carrito. Máximo 500
+                      caracteres. ({tienda.mensaje_envio.length}/500)
                     </small>
-                  </div>
                   </div>
 
                   <div className="category-form-field">
                     <label htmlFor="tienda-whatsapp">
                       WhatsApp de contacto
                     </label>
+
                     <input
                       id="tienda-whatsapp"
                       name="whatsapp"
@@ -482,6 +506,7 @@ function Configuration() {
                       maxLength={30}
                       disabled={guardandoTienda}
                     />
+
                     <small>
                       Incluye el indicativo del país si corresponde.
                     </small>
@@ -491,6 +516,7 @@ function Configuration() {
                     <label htmlFor="tienda-mayorista">
                       Compra mínima mayorista
                     </label>
+
                     <input
                       id="tienda-mayorista"
                       name="monto_minimo_mayorista"
@@ -502,6 +528,7 @@ function Configuration() {
                       placeholder="Ej. 150000"
                       disabled={guardandoTienda}
                     />
+
                     <small>
                       Deja el campo vacío si no deseas establecer un mínimo.
                     </small>
@@ -509,6 +536,7 @@ function Configuration() {
 
                   <div className="category-form-field">
                     <label htmlFor="tienda-moneda">Moneda</label>
+
                     <select
                       id="tienda-moneda"
                       name="moneda"
@@ -545,6 +573,7 @@ function Configuration() {
                   <div className="configuration-section-icon">
                     <Share2 size={21} />
                   </div>
+
                   <div>
                     <h2>Redes sociales</h2>
                     <p>
@@ -587,6 +616,7 @@ function Configuration() {
 
                         <div className="configuration-social-text">
                           <strong>{red.plataforma}</strong>
+
                           <a
                             href={red.url}
                             target="_blank"
@@ -594,6 +624,7 @@ function Configuration() {
                           >
                             {red.url}
                           </a>
+
                           <span
                             className={
                               Number(red.activo) === 1
@@ -675,6 +706,7 @@ function Configuration() {
                   <h2 id="social-modal-title">
                     {redEditar ? "Editar red social" : "Nueva red social"}
                   </h2>
+
                   <p>
                     Ingresa el nombre de la plataforma y el enlace del perfil.
                   </p>
@@ -696,6 +728,7 @@ function Configuration() {
                   <label htmlFor="red-plataforma">
                     Plataforma *
                   </label>
+
                   <input
                     id="red-plataforma"
                     name="plataforma"
@@ -712,6 +745,7 @@ function Configuration() {
                   <label htmlFor="red-url">
                     URL del perfil *
                   </label>
+
                   <input
                     id="red-url"
                     name="url"
@@ -729,6 +763,7 @@ function Configuration() {
                   <label htmlFor="red-orden">
                     Orden de visualización
                   </label>
+
                   <input
                     id="red-orden"
                     name="orden"
@@ -740,6 +775,7 @@ function Configuration() {
                     required
                     disabled={guardandoRed}
                   />
+
                   <small>
                     Los números menores aparecerán primero.
                   </small>

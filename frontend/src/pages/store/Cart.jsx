@@ -13,7 +13,6 @@ import {
 
 import { useCart } from "../../context/CartContext";
 import logo from "../../assets/logo siempre bella.webp";
-
 import "../../styles/cart.css";
 
 function Cart() {
@@ -86,21 +85,23 @@ function Cart() {
         return (
           `${indice + 1}. ${item.nombre}\n` +
           `   Cantidad: ${item.cantidad}\n` +
-          `   Precio: ${formatoPrecio(item.precio_unitario)}\n` +
+          `   Precio unitario: ${formatoPrecio(item.precio_unitario)}\n` +
           `   Subtotal: ${formatoPrecio(subtotal)}`
         );
       })
       .join("\n\n");
 
-    const mensaje = `¡Hola, Siempre Bella! Quiero realizar el siguiente pedido:
-
-    ${detalle}
-
-    TOTAL: ${formatoPrecio(total)}
-
-    ${mensajeEnvio}
-
-    ¿Me pueden confirmar disponibilidad y medios de pago?`;
+    const mensaje =
+      `¡Hola, Siempre Bella! \u{1F497}\n\n` +
+      `Me gustaría realizar el siguiente pedido:\n\n` +
+      `\u{1F6CD}\u{FE0F} *MI PEDIDO*\n\n` +
+      `${detalle}\n\n` +
+      `━━━━━━━━━━━━━━\n` +
+      `*TOTAL: ${formatoPrecio(total)}*\n` +
+      `━━━━━━━━━━━━━━\n\n` +
+      `\u{1F4E6} El valor del envío se confirma por WhatsApp según tu ubicación.\n\n` +
+      `¿Me podrían confirmar la disponibilidad de los productos y los medios de pago?\n\n` +
+      `¡Muchas gracias! \u{1F495}`;
 
     const url = `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`;
 
@@ -145,7 +146,6 @@ function Cart() {
           <div className="cart-layout">
 
             {/* LISTA DE PRODUCTOS */}
-
             <section className="cart-products">
 
               <div className="cart-products-heading">
@@ -279,7 +279,6 @@ function Cart() {
             </section>
 
             {/* RESUMEN DEL PEDIDO */}
-
             <aside className="cart-summary">
 
               <h2>Resumen del pedido</h2>

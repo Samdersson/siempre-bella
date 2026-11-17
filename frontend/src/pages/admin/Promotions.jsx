@@ -11,12 +11,12 @@ import {
 } from "lucide-react";
 
 import AdminLayout from "../../components/layout/AdminLayout.jsx";
+import { obtenerHeadersCSRF } from "../../services/csrf.js";
 import "../../styles/admin-products.css";
 import "../../styles/admin-categories.css";
 
 const formularioInicial = {
   producto_id: "",
-  variante_id: "",
   nombre: "",
   precio_minorista_promocional: "",
   precio_mayorista_promocional: "",
@@ -147,12 +147,8 @@ function Promotions() {
       Number(producto.id) === Number(formulario.producto_id)
   );
 
-  const varianteSeleccionada = productoSeleccionado?.variantes?.find(
-    (variante) =>
-      Number(variante.id) === Number(formulario.variante_id)
-  );
-
-  const preciosNormales = varianteSeleccionada || productoSeleccionado;
+  // Las promociones se aplican únicamente al producto completo.
+  const preciosNormales = productoSeleccionado;
 
   const abrirNuevaPromocion = () => {
     setPromocionEditar(null);
@@ -167,9 +163,6 @@ function Promotions() {
 
     setFormulario({
       producto_id: String(promocion.producto_id),
-      variante_id: promocion.variante_id
-        ? String(promocion.variante_id)
-        : "",
       nombre: promocion.nombre || "",
       precio_minorista_promocional:
         promocion.precio_minorista_promocional ?? "",
@@ -189,8 +182,7 @@ function Promotions() {
 
     setFormulario((anterior) => ({
       ...anterior,
-      [name]: value,
-      ...(name === "producto_id" ? { variante_id: "" } : {})
+      [name]: value
     }));
   };
 
@@ -211,9 +203,7 @@ function Promotions() {
       const datos = {
         ...formulario,
         producto_id: Number(formulario.producto_id),
-        variante_id: formulario.variante_id
-          ? Number(formulario.variante_id)
-          : null,
+        variante_id: null,
         precio_minorista_promocional:
           formulario.precio_minorista_promocional === ""
             ? null
@@ -232,9 +222,9 @@ function Promotions() {
 
       const respuesta = await fetch(endpoint, {
         method: "POST",
-        headers: {
+        headers: await obtenerHeadersCSRF({
           "Content-Type": "application/json"
-        },
+        }),
         credentials: "include",
         body: JSON.stringify(datos)
       });
@@ -288,9 +278,9 @@ function Promotions() {
         "/api/promociones/cambiar_estado.php",
         {
           method: "POST",
-          headers: {
+          headers: await obtenerHeadersCSRF({
             "Content-Type": "application/json"
-          },
+          }),
           credentials: "include",
           body: JSON.stringify({
             id: Number(promocion.id),
@@ -398,7 +388,7 @@ function Promotions() {
               <thead>
                 <tr>
                   <th>Promoción</th>
-                  <th>Producto / Variante</th>
+                  <th>Producto</th>
                   <th>Precio promocional</th>
                   <th>Vigencia</th>
                   <th>Estado</th>
@@ -424,9 +414,7 @@ function Promotions() {
                       <td>
                         <strong>{promocion.producto_nombre}</strong>
                         <br />
-                        <small>
-                          {promocion.variante_nombre || "Producto general"}
-                        </small>
+                        <small>Producto completo</small>
                       </td>
 
                       <td>
@@ -589,33 +577,6 @@ function Promotions() {
                     ))}
                   </select>
                 </div>
-
-                {/* VARIANTE */}
-                {productoSeleccionado?.variantes?.length > 0 && (
-                  <div className="category-form-field">
-                    <label htmlFor="promo-variante">
-                      Variante
-                    </label>
-
-                    <select
-                      id="promo-variante"
-                      name="variante_id"
-                      value={formulario.variante_id}
-                      onChange={manejarCambio}
-                      disabled={guardando}
-                    >
-                      <option value="">
-                        Promoción para todo el producto
-                      </option>
-
-                      {productoSeleccionado.variantes.map((variante) => (
-                        <option key={variante.id} value={variante.id}>
-                          {variante.nombre}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
 
                 {/* PRECIOS NORMALES */}
                 {preciosNormales && (

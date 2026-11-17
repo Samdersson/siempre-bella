@@ -34,6 +34,7 @@ try {
             p.slug,
             p.descripcion,
             p.precio_minorista,
+            p.precio_mayorista,
             p.disponibilidad,
 
             c.nombre AS categoria,

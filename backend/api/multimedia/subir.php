@@ -2,12 +2,17 @@
 <?php
 
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('X-Content-Type-Options: nosniff');
 
-require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../config/session.php';
+require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/csrf.php';
 
 // 1. Validar método HTTP
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header('Allow: POST');
     http_response_code(405);
 
     echo json_encode([
@@ -30,13 +35,25 @@ if (!isset($_SESSION['admin'])) {
     exit;
 }
 
-// 3. Verificar archivo recibido
-if (!isset($_FILES['archivo'])) {
+// 3. Validar token CSRF
+exigirTokenCSRF();
+
+// 4. Verificar estructura del archivo recibido
+if (
+    !isset($_FILES['archivo']) ||
+    !is_array($_FILES['archivo']) ||
+    !isset(
+        $_FILES['archivo']['name'],
+        $_FILES['archivo']['tmp_name'],
+        $_FILES['archivo']['error'],
+        $_FILES['archivo']['size']
+    )
+) {
     http_response_code(400);
 
     echo json_encode([
         'success' => false,
-        'message' => 'Selecciona una imagen.'
+        'message' => 'Selecciona una imagen válida.'
     ], JSON_UNESCAPED_UNICODE);
 
     exit;
@@ -44,6 +61,7 @@ if (!isset($_FILES['archivo'])) {
 
 $archivo = $_FILES['archivo'];
 
+// Solo permitir una imagen por solicitud
 if (is_array($archivo['name'])) {
     http_response_code(400);
 
@@ -55,6 +73,7 @@ if (is_array($archivo['name'])) {
     exit;
 }
 
+// Validar errores de carga
 if ($archivo['error'] !== UPLOAD_ERR_OK) {
     http_response_code(400);
 
@@ -66,7 +85,7 @@ if ($archivo['error'] !== UPLOAD_ERR_OK) {
     exit;
 }
 
-// 4. Configuración
+// 5. Configuración
 $tiposPermitidos = [
     'image/jpeg',
     'image/png',
@@ -87,8 +106,9 @@ $anchoMaximo = 1600;
 $altoMaximo = 1600;
 $calidadWebp = 78;
 
-// 5. Validar tamaño
+// 6. Validar tamaño
 if (
+    !is_numeric($archivo['size']) ||
     $archivo['size'] <= 0 ||
     $archivo['size'] > $pesoMaximo
 ) {
@@ -102,10 +122,40 @@ if (
     exit;
 }
 
-// 6. Validar archivo temporal
+// 7. Validar texto alternativo antes de procesar la imagen
+$textoAlternativo = $_POST['texto_alternativo'] ?? '';
+
+if (!is_string($textoAlternativo)) {
+    http_response_code(400);
+
+    echo json_encode([
+        'success' => false,
+        'message' => 'El texto alternativo no es válido.'
+    ], JSON_UNESCAPED_UNICODE);
+
+    exit;
+}
+
+$textoAlternativo = trim($textoAlternativo);
+
+if (mb_strlen($textoAlternativo, 'UTF-8') > 255) {
+    http_response_code(400);
+
+    echo json_encode([
+        'success' => false,
+        'message' => 'El texto alternativo no puede superar 255 caracteres.'
+    ], JSON_UNESCAPED_UNICODE);
+
+    exit;
+}
+
+// 8. Validar archivo temporal
 $archivoTemporal = $archivo['tmp_name'];
 
-if (!is_uploaded_file($archivoTemporal)) {
+if (
+    !is_string($archivoTemporal) ||
+    !is_uploaded_file($archivoTemporal)
+) {
     http_response_code(400);
 
     echo json_encode([
@@ -120,10 +170,11 @@ $conexion = null;
 $destino = null;
 $imagenOriginal = null;
 $imagenFinal = null;
+$transaccionActiva = false;
 
 try {
 
-    // 7. Comprobar formato real
+    // 9. Comprobar formato MIME real
     $finfo = new finfo(FILEINFO_MIME_TYPE);
     $mime = $finfo->file($archivoTemporal);
 
@@ -133,7 +184,7 @@ try {
         );
     }
 
-    // 8. Validar extensión original
+    // 10. Validar extensión original
     $extensionOriginal = strtolower(
         pathinfo($archivo['name'], PATHINFO_EXTENSION)
     );
@@ -144,7 +195,7 @@ try {
         );
     }
 
-    // 9. Comprobar dimensiones
+    // 11. Comprobar dimensiones
     $informacion = getimagesize($archivoTemporal);
 
     if ($informacion === false) {
@@ -166,7 +217,7 @@ try {
         );
     }
 
-    // 10. Crear imagen desde el archivo original
+    // 12. Leer imagen original
     $contenido = file_get_contents($archivoTemporal);
 
     if ($contenido === false) {
@@ -185,7 +236,7 @@ try {
         );
     }
 
-    // 11. Calcular dimensiones proporcionales
+    // 13. Calcular dimensiones proporcionales
     $escala = min(
         1,
         $anchoMaximo / $anchoOriginal,
@@ -240,11 +291,11 @@ try {
         $altoOriginal
     );
 
-    // 12. Preparar directorio
+    // 14. Preparar directorio
     $directorio = __DIR__ . '/../../uploads/multimedia/';
 
     if (!is_dir($directorio)) {
-        if (!mkdir($directorio, 0755, true)) {
+        if (!mkdir($directorio, 0755, true) && !is_dir($directorio)) {
             throw new RuntimeException(
                 'No fue posible crear la carpeta multimedia.'
             );
@@ -257,13 +308,13 @@ try {
         );
     }
 
-    // 13. Generar nombre único
+    // 15. Generar nombre aleatorio
     $nombreOriginal = basename($archivo['name']);
     $nombreArchivo = bin2hex(random_bytes(16)) . '.webp';
 
     $destino = $directorio . $nombreArchivo;
 
-    // 14. Convertir una sola vez a WEBP
+    // 16. Convertir a WEBP
     $convertida = imagewebp(
         $imagenFinal,
         $destino,
@@ -286,30 +337,25 @@ try {
         );
     }
 
-    // 15. Preparar datos del recurso
+    // 17. Preparar datos del recurso
     $rutaRelativa = 'uploads/multimedia/' . $nombreArchivo;
-
     $tamanoFinal = filesize($destino);
 
-    $textoAlternativo = trim(
-        $_POST['texto_alternativo'] ?? ''
-    );
-
-    if (mb_strlen($textoAlternativo, 'UTF-8') > 255) {
-        throw new InvalidArgumentException(
-            'El texto alternativo no puede superar 255 caracteres.'
-        );
-    }
-
-
-    // 16. Registrar en la base de datos
+    // 18. Registrar en base de datos
     $database = new Database();
     $conexion = $database->connect();
 
-    $conexion->beginTransaction();
+    if (!$conexion instanceof PDO) {
+        throw new RuntimeException(
+            'No se pudo establecer la conexión con la base de datos.'
+        );
+    }
 
-    $consulta = $conexion->prepare(
-        "INSERT INTO recursos_multimedia (
+    $conexion->beginTransaction();
+    $transaccionActiva = true;
+
+    $consulta = $conexion->prepare("
+        INSERT INTO recursos_multimedia (
             nombre_original,
             nombre_archivo,
             ruta_archivo,
@@ -318,8 +364,8 @@ try {
             tamanio_bytes,
             texto_alternativo,
             activo
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 1)"
-    );
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+    ");
 
     $consulta->execute([
         $nombreOriginal,
@@ -334,8 +380,9 @@ try {
     $recursoId = (int) $conexion->lastInsertId();
 
     $conexion->commit();
+    $transaccionActiva = false;
 
-    // 17. Respuesta
+    // 19. Respuesta
     echo json_encode([
         'success' => true,
         'message' => 'Imagen cargada y optimizada correctamente.',
@@ -351,15 +398,16 @@ try {
             'ancho' => $nuevoAncho,
             'alto' => $nuevoAlto
         ]
-    ], JSON_UNESCAPED_UNICODE);
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
 } catch (InvalidArgumentException $e) {
 
-    if ($conexion && $conexion->inTransaction()) {
+    if ($conexion && $transaccionActiva && $conexion->inTransaction()) {
         $conexion->rollBack();
+        $transaccionActiva = false;
     }
 
-    if ($destino && file_exists($destino)) {
+    if ($destino && is_file($destino)) {
         unlink($destino);
     }
 
@@ -372,15 +420,18 @@ try {
 
 } catch (Throwable $e) {
 
-    if ($conexion && $conexion->inTransaction()) {
+    if ($conexion && $transaccionActiva && $conexion->inTransaction()) {
         $conexion->rollBack();
+        $transaccionActiva = false;
     }
 
-    if ($destino && file_exists($destino)) {
+    if ($destino && is_file($destino)) {
         unlink($destino);
     }
 
-    error_log($e->getMessage());
+    error_log(
+        'Error al subir recurso multimedia: ' . $e->getMessage()
+    );
 
     http_response_code(500);
 

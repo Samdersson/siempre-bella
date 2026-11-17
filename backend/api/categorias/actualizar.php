@@ -2,11 +2,13 @@
 <?php
 
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate');
+header('X-Content-Type-Options: nosniff');
 
 require_once __DIR__ . '/../../config/database.php';
-require_once __DIR__ . '/../../config/session.php';
+require_once __DIR__ . '/../../config/csrf.php';
 
-// 1. Validar método
+// 1. Validar método HTTP
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
 
@@ -18,19 +20,26 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// 2. Validar sesión
-if (!isset($_SESSION['admin'])) {
+// 2. Validar sesión administrativa
+if (
+    !isset($_SESSION['admin']) ||
+    !is_array($_SESSION['admin']) ||
+    !isset($_SESSION['admin']['id'])
+) {
     http_response_code(401);
 
     echo json_encode([
         'success' => false,
-        'message' => 'No autorizado.'
+        'message' => 'No autorizado. Inicia sesión nuevamente.'
     ], JSON_UNESCAPED_UNICODE);
 
     exit;
 }
 
-// 3. Recibir datos
+// 3. Validar token CSRF
+exigirTokenCSRF();
+
+// 4. Recibir datos JSON
 $datos = json_decode(file_get_contents('php://input'), true);
 
 if (!is_array($datos)) {
@@ -44,20 +53,41 @@ if (!is_array($datos)) {
     exit;
 }
 
+// 5. Validar tipos de datos
+if (
+    !isset($datos['nombre']) ||
+    !is_string($datos['nombre']) ||
+    (isset($datos['descripcion']) && !is_string($datos['descripcion']))
+) {
+    http_response_code(400);
+
+    echo json_encode([
+        'success' => false,
+        'message' => 'Los datos de la categoría no son válidos.'
+    ], JSON_UNESCAPED_UNICODE);
+
+    exit;
+}
+
+// 6. Obtener información
 $categoriaId = filter_var(
     $datos['id'] ?? null,
     FILTER_VALIDATE_INT
 );
 
-$nombre = trim($datos['nombre'] ?? '');
+$nombre = trim($datos['nombre']);
 $descripcion = trim($datos['descripcion'] ?? '');
 
 $activo = isset($datos['activo'])
     ? filter_var($datos['activo'], FILTER_VALIDATE_INT)
     : 1;
 
-// 4. Validaciones
-if (!$categoriaId || $categoriaId < 1) {
+// 7. Validar identificador
+if (
+    $categoriaId === false ||
+    $categoriaId === null ||
+    $categoriaId < 1
+) {
     http_response_code(400);
 
     echo json_encode([
@@ -68,6 +98,7 @@ if (!$categoriaId || $categoriaId < 1) {
     exit;
 }
 
+// 8. Validar nombre
 if ($nombre === '' || mb_strlen($nombre, 'UTF-8') > 100) {
     http_response_code(400);
 
@@ -79,6 +110,7 @@ if ($nombre === '' || mb_strlen($nombre, 'UTF-8') > 100) {
     exit;
 }
 
+// 9. Validar descripción
 if (mb_strlen($descripcion, 'UTF-8') > 255) {
     http_response_code(400);
 
@@ -90,7 +122,12 @@ if (mb_strlen($descripcion, 'UTF-8') > 255) {
     exit;
 }
 
-if (!in_array($activo, [0, 1], true)) {
+// 10. Validar estado
+if (
+    $activo === false ||
+    $activo === null ||
+    !in_array($activo, [0, 1], true)
+) {
     http_response_code(400);
 
     echo json_encode([
@@ -101,23 +138,33 @@ if (!in_array($activo, [0, 1], true)) {
     exit;
 }
 
-// 5. Generar slug
+// 11. Generar slug
 function generarSlugCategoriaActualizar(string $texto): string
 {
     $texto = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $texto);
+
+    if ($texto === false) {
+        return '';
+    }
+
     $texto = strtolower($texto);
     $texto = preg_replace('/[^a-z0-9]+/', '-', $texto);
 
     return trim($texto, '-');
 }
 
+// 12. Actualizar categoría
 try {
+
     $database = new Database();
     $conexion = $database->connect();
 
     // Comprobar que la categoría existe
     $consultaCategoria = $conexion->prepare(
-        "SELECT id FROM categorias WHERE id = ?"
+        "SELECT id
+         FROM categorias
+         WHERE id = ?
+         LIMIT 1"
     );
 
     $consultaCategoria->execute([$categoriaId]);
@@ -153,7 +200,11 @@ try {
     );
 
     while (true) {
-        $consultaSlug->execute([$slug, $categoriaId]);
+
+        $consultaSlug->execute([
+            $slug,
+            $categoriaId
+        ]);
 
         if (!$consultaSlug->fetch()) {
             break;
@@ -161,9 +212,15 @@ try {
 
         $slug = $slugBase . '-' . $contador;
         $contador++;
+
+        if ($contador > 10000) {
+            throw new RuntimeException(
+                'No fue posible generar un slug único.'
+            );
+        }
     }
 
-    // Actualizar categoría
+    // Actualizar categoría sin modificar su imagen
     $consulta = $conexion->prepare(
         "UPDATE categorias SET
             nombre = ?,
@@ -189,6 +246,7 @@ try {
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (InvalidArgumentException $e) {
+
     http_response_code(400);
 
     echo json_encode([
@@ -197,7 +255,10 @@ try {
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {
-    error_log($e->getMessage());
+
+    error_log(
+        'Error al actualizar categoría: ' . $e->getMessage()
+    );
 
     http_response_code(500);
 

@@ -48,8 +48,8 @@ try {
         "recientes" => "p.creado_en DESC",
         "nombre_asc" => "p.nombre ASC",
         "nombre_desc" => "p.nombre DESC",
-        "precio_asc" => "precio_final ASC",
-        "precio_desc" => "precio_final DESC"
+        "precio_asc" => "COALESCE(precio_promocional, p.precio_minorista) ASC",
+        "precio_desc" => "COALESCE(precio_promocional, p.precio_minorista) DESC"
     ];
 
     $ordenSQL = $ordenamientos[$orden] ?? $ordenamientos["recientes"];

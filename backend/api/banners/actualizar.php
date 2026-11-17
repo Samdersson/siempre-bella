@@ -2,40 +2,58 @@
 <?php
 
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate');
+header('X-Content-Type-Options: nosniff');
 
 require_once __DIR__ . '/../../config/database.php';
-require_once __DIR__ . '/../../config/session.php';
+require_once __DIR__ . '/../../config/csrf.php';
 
-if (!isset($_SESSION['admin'])) {
-    http_response_code(401);
-    echo json_encode([
-        'success' => false,
-        'message' => 'No autorizado.'
-    ], JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
+// 1. Verificar método HTTP
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
+
     echo json_encode([
         'success' => false,
         'message' => 'Método no permitido.'
     ], JSON_UNESCAPED_UNICODE);
+
     exit;
 }
 
+// 2. Verificar sesión administrativa
+if (
+    !isset($_SESSION['admin']) ||
+    !is_array($_SESSION['admin']) ||
+    !isset($_SESSION['admin']['id'])
+) {
+    http_response_code(401);
+
+    echo json_encode([
+        'success' => false,
+        'message' => 'No autorizado. Inicia sesión nuevamente.'
+    ], JSON_UNESCAPED_UNICODE);
+
+    exit;
+}
+
+// 3. Validar token CSRF
+exigirTokenCSRF();
+
+// 4. Recibir datos JSON
 $datos = json_decode(file_get_contents('php://input'), true);
 
 if (!is_array($datos)) {
     http_response_code(400);
+
     echo json_encode([
         'success' => false,
         'message' => 'Los datos enviados no son válidos.'
     ], JSON_UNESCAPED_UNICODE);
+
     exit;
 }
 
-// Identificadores
+// 5. Validar identificadores
 $id = filter_var($datos['id'] ?? null, FILTER_VALIDATE_INT);
 $imagenId = filter_var($datos['imagen_id'] ?? null, FILTER_VALIDATE_INT);
 
@@ -52,16 +70,35 @@ if (
     );
 }
 
-if (!$id || $id <= 0 || !$imagenId || $imagenId <= 0) {
+if (
+    $id === false || $id === null || $id <= 0 ||
+    $imagenId === false || $imagenId === null || $imagenId <= 0
+) {
     http_response_code(400);
+
     echo json_encode([
         'success' => false,
         'message' => 'El identificador del banner o de la imagen no es válido.'
     ], JSON_UNESCAPED_UNICODE);
+
     exit;
 }
 
-// Datos del banner
+if (
+    $imagenMovilId !== null &&
+    ($imagenMovilId === false || $imagenMovilId <= 0)
+) {
+    http_response_code(400);
+
+    echo json_encode([
+        'success' => false,
+        'message' => 'La imagen móvil seleccionada no es válida.'
+    ], JSON_UNESCAPED_UNICODE);
+
+    exit;
+}
+
+// 6. Obtener datos del banner
 $nombre = trim($datos['nombre'] ?? '');
 $titulo = trim($datos['titulo'] ?? '');
 $subtitulo = trim($datos['subtitulo'] ?? '');
@@ -75,35 +112,41 @@ $fechaFin = $datos['fecha_fin'] ?? null;
 $fechaInicio = ($fechaInicio === '') ? null : $fechaInicio;
 $fechaFin = ($fechaFin === '') ? null : $fechaFin;
 
-// Validar campos de texto
+// 7. Validar campos de texto
 if ($nombre === '' || mb_strlen($nombre) > 150) {
     http_response_code(400);
+
     echo json_encode([
         'success' => false,
         'message' => 'El nombre es obligatorio y debe tener máximo 150 caracteres.'
     ], JSON_UNESCAPED_UNICODE);
+
     exit;
 }
 
 if (mb_strlen($titulo) > 200 || mb_strlen($subtitulo) > 500) {
     http_response_code(400);
+
     echo json_encode([
         'success' => false,
         'message' => 'El título o subtítulo supera la longitud permitida.'
     ], JSON_UNESCAPED_UNICODE);
+
     exit;
 }
 
 if (mb_strlen($textoBoton) > 100 || mb_strlen($enlaceBoton) > 500) {
     http_response_code(400);
+
     echo json_encode([
         'success' => false,
         'message' => 'El texto o enlace del botón supera la longitud permitida.'
     ], JSON_UNESCAPED_UNICODE);
+
     exit;
 }
 
-// Validar posición
+// 8. Validar posición
 $posicionesPermitidas = [
     'principal',
     'secundario',
@@ -112,26 +155,30 @@ $posicionesPermitidas = [
 
 if (!in_array($posicion, $posicionesPermitidas, true)) {
     http_response_code(400);
+
     echo json_encode([
         'success' => false,
         'message' => 'La posición seleccionada no es válida.'
     ], JSON_UNESCAPED_UNICODE);
+
     exit;
 }
 
-// Validar orden
+// 9. Validar orden
 $orden = filter_var($datos['orden'] ?? null, FILTER_VALIDATE_INT);
 
 if ($orden === false || $orden === null || $orden < 0) {
     http_response_code(400);
+
     echo json_encode([
         'success' => false,
         'message' => 'El orden debe ser un número entero igual o mayor que cero.'
     ], JSON_UNESCAPED_UNICODE);
+
     exit;
 }
 
-// Validar fechas
+// 10. Validar fechas
 function validarFechaActualizacionBanner($fecha): bool
 {
     if ($fecha === null) {
@@ -153,10 +200,12 @@ if (
     !validarFechaActualizacionBanner($fechaFin)
 ) {
     http_response_code(400);
+
     echo json_encode([
         'success' => false,
         'message' => 'Las fechas deben tener el formato YYYY-MM-DD HH:MM:SS.'
     ], JSON_UNESCAPED_UNICODE);
+
     exit;
 }
 
@@ -166,13 +215,16 @@ if (
     strtotime($fechaFin) <= strtotime($fechaInicio)
 ) {
     http_response_code(400);
+
     echo json_encode([
         'success' => false,
         'message' => 'La fecha final debe ser posterior a la fecha inicial.'
     ], JSON_UNESCAPED_UNICODE);
+
     exit;
 }
 
+// 11. Actualizar banner
 try {
 
     $database = new Database();
@@ -190,10 +242,12 @@ try {
 
     if (!$consultaBanner->fetch()) {
         http_response_code(404);
+
         echo json_encode([
             'success' => false,
             'message' => 'El banner no existe.'
         ], JSON_UNESCAPED_UNICODE);
+
         exit;
     }
 
@@ -216,9 +270,9 @@ try {
     // Verificar imagen móvil
     if ($imagenMovilId !== null) {
 
-        if ($imagenMovilId <= 0 || $imagenMovilId === $imagenId) {
+        if ($imagenMovilId === $imagenId) {
             throw new InvalidArgumentException(
-                'La imagen móvil seleccionada no es válida.'
+                'La imagen móvil debe ser diferente de la imagen principal.'
             );
         }
 

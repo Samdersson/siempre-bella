@@ -19,6 +19,7 @@ import {
 
 import AdminLayout from "../../components/layout/AdminLayout.jsx";
 import "../../styles/media-library.css";
+import { obtenerHeadersCSRF } from "../../services/csrf.js";
 
 const API = "/api/multimedia";
 
@@ -74,7 +75,9 @@ function MediaLibrary() {
       }
 
       if (!respuesta.ok || !json.success) {
-        throw new Error(json.message || "No fue posible consultar los recursos.");
+        throw new Error(
+          json.message || "No fue posible consultar los recursos."
+        );
       }
 
       setRecursos(json.data || []);
@@ -95,7 +98,7 @@ function MediaLibrary() {
     cargarRecursos(pagina);
   }, [pagina, buscar]);
 
-  // Mostrar mensajes temporales
+  // Mostrar mensajes
   const notificar = (tipo, texto) => {
     setMensaje({ tipo, texto });
   };
@@ -109,13 +112,21 @@ function MediaLibrary() {
     const tipos = ["image/jpeg", "image/png", "image/webp"];
 
     if (!tipos.includes(seleccionado.type)) {
-      notificar("error", "Formato no permitido. Utiliza JPG, PNG o WEBP.");
+      notificar(
+        "error",
+        "Formato no permitido. Utiliza JPG, PNG o WEBP."
+      );
+
       e.target.value = "";
       return;
     }
 
-    if (seleccionado.size > 5 * 1024 * 1024) {
-      notificar("error", "La imagen no puede superar los 5 MB.");
+    if (seleccionado.size <= 0 || seleccionado.size > 5 * 1024 * 1024) {
+      notificar(
+        "error",
+        "La imagen debe pesar más de 0 y máximo 5 MB."
+      );
+
       e.target.value = "";
       return;
     }
@@ -142,6 +153,7 @@ function MediaLibrary() {
       const respuesta = await fetch(`${API}/subir.php`, {
         method: "POST",
         credentials: "include",
+        headers: await obtenerHeadersCSRF(),
         body: datos
       });
 
@@ -156,7 +168,9 @@ function MediaLibrary() {
       }
 
       if (!respuesta.ok || !json.success) {
-        throw new Error(json.message || "No fue posible subir la imagen.");
+        throw new Error(
+          json.message || "No fue posible subir la imagen."
+        );
       }
 
       setModalVista(null);
@@ -196,9 +210,9 @@ function MediaLibrary() {
       const respuesta = await fetch(`${API}/cambiar_estado.php`, {
         method: "POST",
         credentials: "include",
-        headers: {
+        headers: await obtenerHeadersCSRF({
           "Content-Type": "application/json"
-        },
+        }),
         body: JSON.stringify({
           id: recurso.id,
           activo: nuevoEstado
@@ -216,7 +230,9 @@ function MediaLibrary() {
       }
 
       if (!respuesta.ok || !json.success) {
-        throw new Error(json.message || "No fue posible cambiar el estado.");
+        throw new Error(
+          json.message || "No fue posible cambiar el estado."
+        );
       }
 
       notificar(
@@ -243,8 +259,14 @@ function MediaLibrary() {
   ).length;
 
   const recursosFiltrados = recursos.filter((recurso) => {
-    if (filtro === "activos") return Number(recurso.activo) === 1;
-    if (filtro === "inactivos") return Number(recurso.activo) === 0;
+    if (filtro === "activos") {
+      return Number(recurso.activo) === 1;
+    }
+
+    if (filtro === "inactivos") {
+      return Number(recurso.activo) === 0;
+    }
+
     return true;
   });
 
@@ -284,7 +306,9 @@ function MediaLibrary() {
         <div className="media-header">
           <div>
             <h1>Biblioteca multimedia</h1>
-            <p>Administra las imágenes y recursos visuales de Siempre Bella.</p>
+            <p>
+              Administra las imágenes y recursos visuales de Siempre Bella.
+            </p>
           </div>
 
           <button
@@ -308,7 +332,11 @@ function MediaLibrary() {
         {mensaje && (
           <div className={`media-message ${mensaje.tipo}`}>
             <span>{mensaje.texto}</span>
-            <button onClick={() => setMensaje(null)} aria-label="Cerrar mensaje">
+
+            <button
+              onClick={() => setMensaje(null)}
+              aria-label="Cerrar mensaje"
+            >
               <X size={17} />
             </button>
           </div>
@@ -321,6 +349,7 @@ function MediaLibrary() {
             <div className="media-stat-icon pink">
               <Images size={21} />
             </div>
+
             <div>
               <span>Recursos encontrados</span>
               <strong>{total}</strong>
@@ -331,6 +360,7 @@ function MediaLibrary() {
             <div className="media-stat-icon green">
               <CheckCircle size={21} />
             </div>
+
             <div>
               <span>Activos en esta página</span>
               <strong>{activos}</strong>
@@ -341,6 +371,7 @@ function MediaLibrary() {
             <div className="media-stat-icon gray">
               <FileImage size={21} />
             </div>
+
             <div>
               <span>Inactivos en esta página</span>
               <strong>{inactivos}</strong>
@@ -351,6 +382,7 @@ function MediaLibrary() {
             <div className="media-stat-icon purple">
               <HardDrive size={21} />
             </div>
+
             <div>
               <span>Espacio de esta página</span>
               <strong>
@@ -372,6 +404,7 @@ function MediaLibrary() {
 
           <div className="media-search">
             <Search size={18} />
+
             <input
               type="search"
               placeholder="Buscar por nombre o descripción..."
@@ -429,6 +462,7 @@ function MediaLibrary() {
           <div className="media-empty">
             <ImagePlus size={45} />
             <h3>No hay imágenes para mostrar</h3>
+
             <p>
               {buscar
                 ? "No encontramos recursos con esa búsqueda."
@@ -455,16 +489,23 @@ function MediaLibrary() {
 
                   <img
                     src={recurso.url}
-                    alt={recurso.texto_alternativo || recurso.nombre_original}
+                    alt={
+                      recurso.texto_alternativo ||
+                      recurso.nombre_original
+                    }
                     loading="lazy"
                   />
 
                   <span
                     className={`media-status ${
-                      Number(recurso.activo) === 1 ? "enabled" : "disabled"
+                      Number(recurso.activo) === 1
+                        ? "enabled"
+                        : "disabled"
                     }`}
                   >
-                    {Number(recurso.activo) === 1 ? "Activo" : "Inactivo"}
+                    {Number(recurso.activo) === 1
+                      ? "Activo"
+                      : "Inactivo"}
                   </span>
 
                   <button
@@ -517,6 +558,7 @@ function MediaLibrary() {
                       onClick={() => cambiarEstado(recurso)}
                     >
                       <Power size={15} />
+
                       {Number(recurso.activo) === 1
                         ? "Desactivar"
                         : "Activar"}
@@ -625,7 +667,8 @@ function MediaLibrary() {
                 />
 
                 <p className="media-help">
-                  JPG, PNG o WEBP. Máximo 5 MB. Se optimizará automáticamente.
+                  JPG, PNG o WEBP. Máximo 5 MB.
+                  Se optimizará automáticamente.
                 </p>
 
                 <button
@@ -633,7 +676,9 @@ function MediaLibrary() {
                   type="submit"
                   disabled={subiendo}
                 >
-                  {subiendo ? "Procesando imagen..." : "Guardar imagen"}
+                  {subiendo
+                    ? "Procesando imagen..."
+                    : "Guardar imagen"}
                 </button>
 
               </form>
@@ -651,6 +696,7 @@ function MediaLibrary() {
                 />
 
                 <div className="media-detail-data">
+
                   <p>
                     <strong>Nombre:</strong>{" "}
                     {modalVista.recurso.nombre_original}
@@ -668,7 +714,8 @@ function MediaLibrary() {
 
                   <p>
                     <strong>Descripción:</strong>{" "}
-                    {modalVista.recurso.texto_alternativo || "Sin descripción"}
+                    {modalVista.recurso.texto_alternativo ||
+                      "Sin descripción"}
                   </p>
 
                   <p>
@@ -690,14 +737,22 @@ function MediaLibrary() {
                         await navigator.clipboard.writeText(
                           modalVista.recurso.url
                         );
-                        notificar("success", "Ruta copiada correctamente.");
+
+                        notificar(
+                          "success",
+                          "Ruta copiada correctamente."
+                        );
                       } catch {
-                        notificar("error", "No fue posible copiar la ruta.");
+                        notificar(
+                          "error",
+                          "No fue posible copiar la ruta."
+                        );
                       }
                     }}
                   >
                     Copiar ruta de imagen
                   </button>
+
                 </div>
 
               </div>

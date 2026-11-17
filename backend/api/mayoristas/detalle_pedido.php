@@ -2,6 +2,9 @@
 <?php
 
 header("Content-Type: application/json; charset=utf-8");
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Pragma: no-cache");
+header("X-Content-Type-Options: nosniff");
 
 require_once __DIR__ . "/../../config/database.php";
 require_once __DIR__ . "/../../config/session.php";
@@ -27,6 +30,7 @@ function responder($success, $mensaje, $codigo = 200, $datos = []) {
 // --------------------------------------------------
 
 if (!isset($_SESSION["admin"])) {
+
     responder(
         false,
         "No tienes autorización para consultar este pedido.",
@@ -39,7 +43,14 @@ if (!isset($_SESSION["admin"])) {
 // --------------------------------------------------
 
 if ($_SERVER["REQUEST_METHOD"] !== "GET") {
-    responder(false, "Método no permitido.", 405);
+
+    header("Allow: GET");
+
+    responder(
+        false,
+        "Método no permitido. Utiliza GET.",
+        405
+    );
 }
 
 try {
@@ -50,7 +61,10 @@ try {
 
     $idRecibido = $_GET["id"] ?? null;
 
-    if (!is_string($idRecibido) && !is_int($idRecibido)) {
+    if (
+        (!is_string($idRecibido) && !is_int($idRecibido)) ||
+        $idRecibido === ""
+    ) {
         responder(
             false,
             "El identificador del pedido no es válido.",
@@ -69,6 +83,7 @@ try {
     );
 
     if ($id === false) {
+
         responder(
             false,
             "El identificador del pedido no es válido.",
@@ -85,13 +100,14 @@ try {
     $connection = $database->connect();
 
     if (!$connection instanceof PDO) {
+
         throw new RuntimeException(
             "No fue posible conectar con la base de datos."
         );
     }
 
     // --------------------------------------------------
-    // 5. CONSULTAR INFORMACIÓN PRINCIPAL
+    // 5. CONSULTAR INFORMACIÓN PRINCIPAL DEL PEDIDO
     // --------------------------------------------------
 
     $consultaPedido = $connection->prepare("
@@ -107,8 +123,11 @@ try {
             estado,
             fecha_creacion,
             fecha_actualizacion
+
         FROM pedidos_mayoristas
+
         WHERE id = :id
+
         LIMIT 1
     ");
 
@@ -119,6 +138,7 @@ try {
     $pedido = $consultaPedido->fetch(PDO::FETCH_ASSOC);
 
     if (!$pedido) {
+
         responder(
             false,
             "No se encontró el pedido solicitado.",
@@ -140,8 +160,11 @@ try {
             precio_unitario,
             subtotal,
             fecha_creacion
+
         FROM pedido_mayorista_detalles
+
         WHERE pedido_id = :pedido_id
+
         ORDER BY id ASC
     ");
 
@@ -167,7 +190,7 @@ try {
 
 } catch (Throwable $e) {
 
-    // Registrar el error internamente.
+    // Registrar el error internamente
     error_log(
         "Error consultando detalle del pedido mayorista: " .
         $e->getMessage()

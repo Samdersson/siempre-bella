@@ -3,7 +3,6 @@ import {
   createContext,
   useContext,
   useEffect,
-  useMemo,
   useState,
 } from "react";
 
@@ -11,6 +10,53 @@ const CartContext = createContext(null);
 
 const STORAGE_KEY = "siempre_bella_carrito";
 
+// Validar y normalizar un producto recuperado del almacenamiento
+function normalizarProducto(item) {
+  if (!item || typeof item !== "object") {
+    return null;
+  }
+
+  const id = Number(item.id);
+  const precioMinorista = Number(item.precio_minorista);
+  const precioPromocional = Number(item.precio_promocional);
+  const cantidad = Math.floor(Number(item.cantidad));
+
+  if (
+    !Number.isSafeInteger(id) ||
+    id <= 0 ||
+    !Number.isFinite(precioMinorista) ||
+    precioMinorista <= 0 ||
+    !Number.isSafeInteger(cantidad) ||
+    cantidad < 1
+  ) {
+    return null;
+  }
+
+  const tienePromocion =
+    item.precio_promocional !== null &&
+    item.precio_promocional !== undefined &&
+    Number.isFinite(precioPromocional) &&
+    precioPromocional > 0 &&
+    precioPromocional < precioMinorista;
+
+  return {
+    id,
+    nombre: String(item.nombre || "Producto"),
+    slug: String(item.slug || ""),
+    imagen: item.imagen || null,
+    marca: item.marca || null,
+    precio_minorista: precioMinorista,
+    precio_promocional: tienePromocion
+      ? precioPromocional
+      : null,
+    precio_unitario: tienePromocion
+      ? precioPromocional
+      : precioMinorista,
+    cantidad,
+  };
+}
+
+// Recuperar carrito
 function cargarCarritoInicial() {
   try {
     const guardado = localStorage.getItem(STORAGE_KEY);
@@ -19,9 +65,20 @@ function cargarCarritoInicial() {
 
     const productos = JSON.parse(guardado);
 
-    return Array.isArray(productos) ? productos : [];
+    if (!Array.isArray(productos)) {
+      return [];
+    }
+
+    return productos
+      .map(normalizarProducto)
+      .filter(Boolean);
+
   } catch (error) {
-    console.error("No fue posible recuperar el carrito:", error);
+    console.error(
+      "No fue posible recuperar el carrito:",
+      error
+    );
+
     return [];
   }
 }
@@ -31,45 +88,58 @@ export function CartProvider({ children }) {
 
   // Guardar automáticamente los cambios
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(items)
+      );
+    } catch (error) {
+      console.error(
+        "No fue posible guardar el carrito:",
+        error
+      );
+    }
   }, [items]);
 
-  // Agregar un producto
+  // Agregar producto
   const agregarProducto = (producto, cantidad = 1) => {
-    if (!producto?.id || producto.disponibilidad === "agotado") {
+    const id = Number(producto?.id);
+
+    if (
+      !Number.isSafeInteger(id) ||
+      id <= 0 ||
+      producto.disponibilidad === "agotado"
+    ) {
       return false;
     }
 
-    const precioNormal = Number(producto.precio_minorista);
+    const productoValidado = normalizarProducto({
+      ...producto,
+      cantidad: 1,
+    });
 
-    const precioPromocional = Number(producto.precio_promocional);
-
-    const tienePromocion =
-      producto.precio_promocional !== null &&
-      producto.precio_promocional !== undefined &&
-      precioPromocional > 0 &&
-      precioPromocional < precioNormal;
-
-    const precioUnitario = tienePromocion
-      ? precioPromocional
-      : precioNormal;
-
-    if (!Number.isFinite(precioUnitario) || precioUnitario <= 0) {
+    if (!productoValidado) {
       return false;
     }
 
-    const cantidadValida = Math.max(1, Math.floor(Number(cantidad) || 1));
+    const cantidadSolicitada = Math.floor(Number(cantidad));
+
+    const cantidadValida =
+      Number.isSafeInteger(cantidadSolicitada) &&
+      cantidadSolicitada > 0
+        ? cantidadSolicitada
+        : 1;
 
     setItems((actuales) => {
       const existente = actuales.find(
-        (item) => Number(item.id) === Number(producto.id)
+        (item) => Number(item.id) === id
       );
 
       if (existente) {
         return actuales.map((item) =>
-          Number(item.id) === Number(producto.id)
+          Number(item.id) === id
             ? {
-                ...item,
+                ...productoValidado,
                 cantidad: item.cantidad + cantidadValida,
               }
             : item
@@ -79,16 +149,7 @@ export function CartProvider({ children }) {
       return [
         ...actuales,
         {
-          id: producto.id,
-          nombre: producto.nombre,
-          slug: producto.slug,
-          imagen: producto.imagen || null,
-          marca: producto.marca || null,
-          precio_minorista: precioNormal,
-          precio_promocional: tienePromocion
-            ? precioPromocional
-            : null,
-          precio_unitario: precioUnitario,
+          ...productoValidado,
           cantidad: cantidadValida,
         },
       ];
@@ -99,16 +160,25 @@ export function CartProvider({ children }) {
 
   // Cambiar cantidad
   const actualizarCantidad = (id, cantidad) => {
+    const productoId = Number(id);
     const nuevaCantidad = Math.floor(Number(cantidad));
 
-    if (!Number.isFinite(nuevaCantidad) || nuevaCantidad < 1) {
+    if (
+      !Number.isSafeInteger(productoId) ||
+      productoId <= 0 ||
+      !Number.isSafeInteger(nuevaCantidad) ||
+      nuevaCantidad < 1
+    ) {
       return;
     }
 
     setItems((actuales) =>
       actuales.map((item) =>
-        Number(item.id) === Number(id)
-          ? { ...item, cantidad: nuevaCantidad }
+        Number(item.id) === productoId
+          ? {
+              ...item,
+              cantidad: nuevaCantidad,
+            }
           : item
       )
     );
@@ -116,8 +186,12 @@ export function CartProvider({ children }) {
 
   // Eliminar producto
   const eliminarProducto = (id) => {
+    const productoId = Number(id);
+
     setItems((actuales) =>
-      actuales.filter((item) => Number(item.id) !== Number(id))
+      actuales.filter(
+        (item) => Number(item.id) !== productoId
+      )
     );
   };
 
@@ -132,24 +206,22 @@ export function CartProvider({ children }) {
     0
   );
 
-  // Valor total
+  // Total de compra
   const total = items.reduce(
-    (suma, item) => suma + item.precio_unitario * item.cantidad,
+    (suma, item) =>
+      suma + item.precio_unitario * item.cantidad,
     0
   );
 
-  const valor = useMemo(
-    () => ({
-      items,
-      totalUnidades,
-      total,
-      agregarProducto,
-      actualizarCantidad,
-      eliminarProducto,
-      vaciarCarrito,
-    }),
-    [items, totalUnidades, total]
-  );
+  const valor = {
+    items,
+    totalUnidades,
+    total,
+    agregarProducto,
+    actualizarCantidad,
+    eliminarProducto,
+    vaciarCarrito,
+  };
 
   return (
     <CartContext.Provider value={valor}>

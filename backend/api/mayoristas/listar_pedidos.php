@@ -2,6 +2,9 @@
 <?php
 
 header("Content-Type: application/json; charset=utf-8");
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Pragma: no-cache");
+header("X-Content-Type-Options: nosniff");
 
 require_once __DIR__ . "/../../config/database.php";
 require_once __DIR__ . "/../../config/session.php";
@@ -39,7 +42,14 @@ if (!isset($_SESSION["admin"])) {
 // --------------------------------------------------
 
 if ($_SERVER["REQUEST_METHOD"] !== "GET") {
-    responder(false, "Método no permitido.", 405);
+
+    header("Allow: GET");
+
+    responder(
+        false,
+        "Método no permitido. Utiliza GET.",
+        405
+    );
 }
 
 try {
@@ -49,7 +59,6 @@ try {
     // --------------------------------------------------
 
     $database = new Database();
-
     $connection = $database->connect();
 
     if (!$connection instanceof PDO) {
@@ -79,7 +88,12 @@ try {
     $busqueda = trim($busquedaRecibida);
     $estado = trim($estadoRecibido);
 
-    if (mb_strlen($busqueda) > 150) {
+    // Limitar longitud de búsqueda
+    $longitudBusqueda = function_exists("mb_strlen")
+        ? mb_strlen($busqueda, "UTF-8")
+        : strlen($busqueda);
+
+    if ($longitudBusqueda > 150) {
         responder(
             false,
             "La búsqueda supera el máximo de 150 caracteres.",
@@ -179,7 +193,9 @@ try {
                 pedido_id,
                 COUNT(*) AS total_productos,
                 SUM(cantidad) AS total_unidades
+
             FROM pedido_mayorista_detalles
+
             GROUP BY pedido_id
         ) detalles
             ON detalles.pedido_id = p.id
@@ -194,7 +210,6 @@ try {
     ";
 
     $consulta = $connection->prepare($sql);
-
     $consulta->execute($parametros);
 
     $pedidos = $consulta->fetchAll(PDO::FETCH_ASSOC);
@@ -202,6 +217,9 @@ try {
     // --------------------------------------------------
     // 8. CONSULTAR ESTADÍSTICAS GENERALES
     // --------------------------------------------------
+
+    // Estas estadísticas corresponden a todos los pedidos,
+    // independientemente de los filtros de búsqueda.
 
     $consultaEstadisticas = $connection->query("
         SELECT
@@ -242,29 +260,36 @@ try {
 
     $estadisticas = $consultaEstadisticas->fetch(PDO::FETCH_ASSOC);
 
-    // Convertir estadísticas a números.
+    if (!is_array($estadisticas)) {
+        throw new RuntimeException(
+            "No fue posible obtener las estadísticas."
+        );
+    }
+
+    // Convertir estadísticas a números enteros
     foreach ($estadisticas as $clave => $valor) {
         $estadisticas[$clave] = (int) $valor;
     }
 
- 
-// --------------------------------------------------
-// 9. DEVOLVER RESULTADOS
-// --------------------------------------------------
+    // --------------------------------------------------
+    // 9. DEVOLVER RESULTADOS
+    // --------------------------------------------------
 
-http_response_code(200);
+    http_response_code(200);
 
-echo json_encode([
-    "success" => true,
-    "message" => "Pedidos consultados correctamente.",
-    "total" => count($pedidos),
-    "estadisticas" => $estadisticas,
-    "data" => $pedidos
-], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo json_encode([
+        "success" => true,
+        "message" => "Pedidos consultados correctamente.",
+        "total" => count($pedidos),
+        "estadisticas" => $estadisticas,
+        "data" => $pedidos
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-exit;
+    exit;
+
 } catch (Throwable $e) {
 
+    // Registrar detalles únicamente en el log del servidor
     error_log(
         "Error consultando pedidos mayoristas: " .
         $e->getMessage()

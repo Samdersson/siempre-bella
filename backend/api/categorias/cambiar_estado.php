@@ -2,11 +2,13 @@
 <?php
 
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate');
+header('X-Content-Type-Options: nosniff');
 
 require_once __DIR__ . '/../../config/database.php';
-require_once __DIR__ . '/../../config/session.php';
+require_once __DIR__ . '/../../config/csrf.php';
 
-// 1. Validar método
+// 1. Validar método HTTP
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
 
@@ -19,18 +21,25 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 // 2. Validar sesión administrativa
-if (!isset($_SESSION['admin'])) {
+if (
+    !isset($_SESSION['admin']) ||
+    !is_array($_SESSION['admin']) ||
+    !isset($_SESSION['admin']['id'])
+) {
     http_response_code(401);
 
     echo json_encode([
         'success' => false,
-        'message' => 'No autorizado.'
+        'message' => 'No autorizado. Inicia sesión nuevamente.'
     ], JSON_UNESCAPED_UNICODE);
 
     exit;
 }
 
-// 3. Recibir datos
+// 3. Validar token CSRF
+exigirTokenCSRF();
+
+// 4. Recibir datos JSON
 $datos = json_decode(file_get_contents('php://input'), true);
 
 if (!is_array($datos)) {
@@ -44,6 +53,7 @@ if (!is_array($datos)) {
     exit;
 }
 
+// 5. Validar identificador y estado
 $categoriaId = filter_var(
     $datos['id'] ?? null,
     FILTER_VALIDATE_INT
@@ -54,8 +64,11 @@ $activo = filter_var(
     FILTER_VALIDATE_INT
 );
 
-// 4. Validar identificador y estado
-if (!$categoriaId || $categoriaId < 1) {
+if (
+    $categoriaId === false ||
+    $categoriaId === null ||
+    $categoriaId < 1
+) {
     http_response_code(400);
 
     echo json_encode([
@@ -66,7 +79,11 @@ if (!$categoriaId || $categoriaId < 1) {
     exit;
 }
 
-if (!in_array($activo, [0, 1], true)) {
+if (
+    $activo === false ||
+    $activo === null ||
+    !in_array($activo, [0, 1], true)
+) {
     http_response_code(400);
 
     echo json_encode([
@@ -77,13 +94,18 @@ if (!in_array($activo, [0, 1], true)) {
     exit;
 }
 
+// 6. Actualizar estado
 try {
+
     $database = new Database();
     $conexion = $database->connect();
 
-    // 5. Comprobar que existe la categoría
+    // Comprobar que existe la categoría
     $consultaExiste = $conexion->prepare(
-        "SELECT id FROM categorias WHERE id = ?"
+        "SELECT id
+         FROM categorias
+         WHERE id = ?
+         LIMIT 1"
     );
 
     $consultaExiste->execute([$categoriaId]);
@@ -99,7 +121,7 @@ try {
         exit;
     }
 
-    // 6. Actualizar estado
+    // Actualizar estado
     $consulta = $conexion->prepare(
         "UPDATE categorias
          SET activo = ?
@@ -121,7 +143,10 @@ try {
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {
-    error_log($e->getMessage());
+
+    error_log(
+        'Error al cambiar estado de categoría: ' . $e->getMessage()
+    );
 
     http_response_code(500);
 

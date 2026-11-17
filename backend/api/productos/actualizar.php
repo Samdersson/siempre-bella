@@ -2,23 +2,13 @@
 <?php
 
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate');
+header('X-Content-Type-Options: nosniff');
 
 require_once __DIR__ . '/../../config/database.php';
-require_once __DIR__ . '/../../config/session.php';
+require_once __DIR__ . '/../../config/csrf.php';
 
-// Verificar sesión administrativa
-if (!isset($_SESSION['admin'])) {
-    http_response_code(401);
-
-    echo json_encode([
-        'success' => false,
-        'message' => 'No autorizado.'
-    ], JSON_UNESCAPED_UNICODE);
-
-    exit;
-}
-
-// Verificar método
+// 1. Verificar método HTTP
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
 
@@ -30,8 +20,28 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// Recibir información
-$datos = json_decode(file_get_contents('php://input'), true);
+// 2. Verificar sesión administrativa
+if (
+    !isset($_SESSION['admin']) ||
+    !is_array($_SESSION['admin']) ||
+    !isset($_SESSION['admin']['id'])
+) {
+    http_response_code(401);
+
+    echo json_encode([
+        'success' => false,
+        'message' => 'No autorizado. Inicia sesión nuevamente.'
+    ], JSON_UNESCAPED_UNICODE);
+
+    exit;
+}
+
+// 3. Validar token CSRF
+exigirTokenCSRF();
+
+// 4. Recibir información
+$contenido = file_get_contents('php://input');
+$datos = json_decode($contenido, true);
 
 if (!is_array($datos)) {
     http_response_code(400);
@@ -44,7 +54,11 @@ if (!is_array($datos)) {
     exit;
 }
 
-$id = filter_var($datos['id'] ?? null, FILTER_VALIDATE_INT);
+// 5. Obtener datos
+$id = filter_var(
+    $datos['id'] ?? null,
+    FILTER_VALIDATE_INT
+);
 
 $nombre = trim($datos['nombre'] ?? '');
 
@@ -66,7 +80,7 @@ $precioMayorista = $datos['precio_mayorista'] ?? null;
 $disponibilidad = $datos['disponibilidad'] ?? 'disponible';
 $activo = isset($datos['activo']) ? (int)$datos['activo'] : 1;
 
-// Validaciones
+// 6. Validar identificador
 if (!$id || $id <= 0) {
     http_response_code(400);
 
@@ -78,6 +92,7 @@ if (!$id || $id <= 0) {
     exit;
 }
 
+// 7. Validar categoría y datos principales
 if (
     $nombre === '' ||
     !$categoriaId ||
@@ -94,6 +109,7 @@ if (
     exit;
 }
 
+// 8. Validar marca
 if (
     $marcaId !== null &&
     ($marcaId === false || $marcaId <= 0)
@@ -108,6 +124,7 @@ if (
     exit;
 }
 
+// 9. Validar disponibilidad
 if (!in_array($disponibilidad, ['disponible', 'agotado'], true)) {
     http_response_code(400);
 
@@ -119,6 +136,7 @@ if (!in_array($disponibilidad, ['disponible', 'agotado'], true)) {
     exit;
 }
 
+// 10. Validar estado
 if (!in_array($activo, [0, 1], true)) {
     http_response_code(400);
 
@@ -130,6 +148,7 @@ if (!in_array($activo, [0, 1], true)) {
     exit;
 }
 
+// 11. Validar precio mayorista
 if ($precioMayorista !== null && $precioMayorista !== '') {
     if (!is_numeric($precioMayorista) || (float)$precioMayorista < 0) {
         http_response_code(400);
@@ -145,6 +164,7 @@ if ($precioMayorista !== null && $precioMayorista !== '') {
     $precioMayorista = null;
 }
 
+// 12. Generar slug
 function generarSlugActualizacion(string $texto): string
 {
     $texto = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $texto);
@@ -154,6 +174,7 @@ function generarSlugActualizacion(string $texto): string
     return trim($texto, '-');
 }
 
+// 13. Actualizar producto
 try {
     $database = new Database();
     $conexion = $database->connect();
@@ -176,7 +197,7 @@ try {
         exit;
     }
 
-    // Comprobar categoría
+    // Comprobar categoría activa
     $consultaCategoria = $conexion->prepare(
         "SELECT id FROM categorias WHERE id = ? AND activo = 1"
     );
@@ -189,7 +210,7 @@ try {
         );
     }
 
-    // Comprobar marca, si se seleccionó
+    // Comprobar marca activa
     if ($marcaId !== null) {
         $consultaMarca = $conexion->prepare(
             "SELECT id FROM marcas WHERE id = ? AND activo = 1"
@@ -216,7 +237,7 @@ try {
     $slug = $slugBase;
     $contador = 1;
 
-    // Evitar duplicar slug, excluyendo el producto actual
+    // Evitar duplicados excluyendo el producto actual
     $consultaSlug = $conexion->prepare(
         "SELECT id
          FROM productos
@@ -235,7 +256,7 @@ try {
         $contador++;
     }
 
-    // Actualizar producto
+    // Ejecutar actualización
     $consulta = $conexion->prepare(
         "UPDATE productos SET
             categoria_id = :categoria_id,
@@ -265,6 +286,7 @@ try {
         'id' => $id
     ]);
 
+    // Respuesta exitosa
     echo json_encode([
         'success' => true,
         'message' => 'Producto actualizado correctamente.',
@@ -273,6 +295,7 @@ try {
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (InvalidArgumentException $e) {
+
     http_response_code(400);
 
     echo json_encode([
@@ -281,6 +304,7 @@ try {
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {
+
     error_log($e->getMessage());
 
     http_response_code(500);

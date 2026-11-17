@@ -1,5 +1,6 @@
 
 import { useEffect, useState } from "react";
+import { obtenerHeadersCSRF } from "../../services/csrf.js";
 import "../../styles/admin-product-form.css";
 
 const estadoInicial = {
@@ -67,7 +68,6 @@ function ProductForm({
 
       } catch (error) {
         setError(error.message);
-
       } finally {
         setCargandoDatos(false);
       }
@@ -157,91 +157,99 @@ function ProductForm({
     );
   };
 
-  // Gestionar imágenes existentes: principal o eliminar
-const gestionarImagen = async (imagen, accion) => {
-  if (!initialData?.producto?.id || !imagen?.id) {
-    setError("No se pudo identificar el producto o la imagen.");
-    return;
-  }
+  // Gestionar imágenes existentes
+  const gestionarImagen = async (imagen, accion) => {
+    if (!initialData?.producto?.id || !imagen?.id) {
+      setError("No se pudo identificar el producto o la imagen.");
+      return;
+    }
 
-  const confirmacion =
-    accion === "eliminar"
-      ? window.confirm("¿Deseas eliminar esta imagen del producto?")
-      : true;
+    const confirmacion =
+      accion === "eliminar"
+        ? window.confirm("¿Deseas eliminar esta imagen del producto?")
+        : true;
 
-  if (!confirmacion) return;
+    if (!confirmacion) return;
 
-  setError("");
-  setMensaje("");
-  setGestionandoImagenId(Number(imagen.id));
-
-  try {
-    const respuesta = await fetch(
-      "/api/productos/gestionar_imagenes.php",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({
-          accion,
-          producto_id: Number(initialData.producto.id),
-          imagen_id: Number(imagen.id),
-        }),
-      }
-    );
-
-    const texto = await respuesta.text();
-
-    let resultado;
+    setError("");
+    setMensaje("");
+    setGestionandoImagenId(Number(imagen.id));
 
     try {
-      resultado = JSON.parse(texto);
-    } catch {
-      throw new Error(
-        `El servidor devolvió una respuesta no válida. HTTP ${respuesta.status}.`
+      const headers = await obtenerHeadersCSRF({
+        "Content-Type": "application/json"
+      });
+
+      const respuesta = await fetch(
+        "/api/productos/gestionar_imagenes.php",
+        {
+          method: "POST",
+          headers,
+          credentials: "include",
+          body: JSON.stringify({
+            accion,
+            producto_id: Number(initialData.producto.id),
+            imagen_id: Number(imagen.id)
+          })
+        }
       );
+
+      const texto = await respuesta.text();
+
+      let resultado;
+
+      try {
+        resultado = JSON.parse(texto);
+      } catch {
+        throw new Error(
+          `El servidor devolvió una respuesta no válida. HTTP ${respuesta.status}.`
+        );
+      }
+
+      if (respuesta.status === 401) {
+        throw new Error(
+          "Tu sesión ha expirado. Inicia sesión nuevamente."
+        );
+      }
+
+      if (respuesta.status === 403) {
+        throw new Error(
+          "La validación de seguridad falló. Recarga la página e inténtalo nuevamente."
+        );
+      }
+
+      if (!respuesta.ok || !resultado.success) {
+        throw new Error(
+          resultado.message || "No fue posible gestionar la imagen."
+        );
+      }
+
+      if (accion === "eliminar") {
+        setImagenesExistentes((anteriores) =>
+          anteriores.filter(
+            (item) => Number(item.id) !== Number(imagen.id)
+          )
+        );
+      }
+
+      if (accion === "principal") {
+        setImagenesExistentes((anteriores) =>
+          anteriores.map((item) => ({
+            ...item,
+            es_principal:
+              Number(item.id) === Number(imagen.id) ? 1 : 0
+          }))
+        );
+      }
+
+      setMensaje(resultado.message);
+
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setGestionandoImagenId(null);
     }
-
-    if (respuesta.status === 401) {
-      throw new Error(
-        "Tu sesión ha expirado. Inicia sesión nuevamente."
-      );
-    }
-
-    if (!respuesta.ok || !resultado.success) {
-      throw new Error(
-        resultado.message || "No fue posible gestionar la imagen."
-      );
-    }
-
-    if (accion === "eliminar") {
-      setImagenesExistentes((anteriores) =>
-        anteriores.filter(
-          (item) => Number(item.id) !== Number(imagen.id)
-        )
-      );
-    }
-
-    if (accion === "principal") {
-      setImagenesExistentes((anteriores) =>
-        anteriores.map((item) => ({
-          ...item,
-          es_principal:
-            Number(item.id) === Number(imagen.id) ? 1 : 0,
-        }))
-      );
-    }
-
-    setMensaje(resultado.message);
-
-  } catch (error) {
-    setError(error.message);
-  } finally {
-    setGestionandoImagenId(null);
-  }
-};
+  };
 
   // Guardar producto
   const guardarProducto = async (e) => {
@@ -267,13 +275,15 @@ const gestionarImagen = async (imagen, accion) => {
       if (modo === "editar") {
         productoId = initialData.producto.id;
 
+        const headers = await obtenerHeadersCSRF({
+          "Content-Type": "application/json"
+        });
+
         const respuesta = await fetch(
           "/api/productos/actualizar.php",
           {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
+            headers,
             credentials: "include",
             body: JSON.stringify({
               ...datosProducto,
@@ -290,6 +300,12 @@ const gestionarImagen = async (imagen, accion) => {
           );
         }
 
+        if (respuesta.status === 403) {
+          throw new Error(
+            "La validación de seguridad falló. Recarga la página e inténtalo nuevamente."
+          );
+        }
+
         if (!respuesta.ok || !resultado.success) {
           throw new Error(
             resultado.message || "No fue posible actualizar el producto."
@@ -301,13 +317,15 @@ const gestionarImagen = async (imagen, accion) => {
         productoId = productoPendienteId;
 
         if (!productoId) {
+          const headers = await obtenerHeadersCSRF({
+            "Content-Type": "application/json"
+          });
+
           const respuesta = await fetch(
             "/api/productos/crear.php",
             {
               method: "POST",
-              headers: {
-                "Content-Type": "application/json"
-              },
+              headers,
               credentials: "include",
               body: JSON.stringify(datosProducto)
             }
@@ -318,6 +336,12 @@ const gestionarImagen = async (imagen, accion) => {
           if (respuesta.status === 401) {
             throw new Error(
               "Tu sesión ha expirado. Vuelve a iniciar sesión."
+            );
+          }
+
+          if (respuesta.status === 403) {
+            throw new Error(
+              "La validación de seguridad falló. Recarga la página e inténtalo nuevamente."
             );
           }
 
@@ -349,10 +373,13 @@ const gestionarImagen = async (imagen, accion) => {
           datosImagenes.append("imagenes[]", imagen);
         });
 
+        const headers = await obtenerHeadersCSRF();
+
         const respuestaImagenes = await fetch(
           "/api/productos/subir_imagenes.php",
           {
             method: "POST",
+            headers,
             credentials: "include",
             body: datosImagenes
           }
@@ -363,6 +390,12 @@ const gestionarImagen = async (imagen, accion) => {
         if (respuestaImagenes.status === 401) {
           throw new Error(
             "Tu sesión ha expirado. Inicia sesión nuevamente."
+          );
+        }
+
+        if (respuestaImagenes.status === 403) {
+          throw new Error(
+            "La validación de seguridad falló. Recarga la página e inténtalo nuevamente."
           );
         }
 
@@ -394,7 +427,6 @@ const gestionarImagen = async (imagen, accion) => {
 
     } catch (error) {
       setError(error.message);
-
     } finally {
       setGuardando(false);
     }
@@ -416,7 +448,6 @@ const gestionarImagen = async (imagen, accion) => {
         </h2>
 
         <div className="product-form-grid">
-
           <div className="product-field full-width">
             <label htmlFor="nombre">
               Nombre del producto *
@@ -465,7 +496,6 @@ const gestionarImagen = async (imagen, accion) => {
               disabled={guardando}
             />
           </div>
-
         </div>
       </section>
 
@@ -474,7 +504,6 @@ const gestionarImagen = async (imagen, accion) => {
         <h2>Categoría y marca</h2>
 
         <div className="product-form-grid">
-
           <div className="product-field">
             <label htmlFor="categoria_id">
               Categoría *
@@ -523,7 +552,6 @@ const gestionarImagen = async (imagen, accion) => {
               ))}
             </select>
           </div>
-
         </div>
       </section>
 
@@ -532,7 +560,6 @@ const gestionarImagen = async (imagen, accion) => {
         <h2>Precios</h2>
 
         <div className="product-form-grid">
-
           <div className="product-field">
             <label htmlFor="precio_minorista">
               Precio minorista (COP) *
@@ -569,7 +596,6 @@ const gestionarImagen = async (imagen, accion) => {
               disabled={guardando}
             />
           </div>
-
         </div>
       </section>
 
@@ -578,7 +604,6 @@ const gestionarImagen = async (imagen, accion) => {
         <h2>Disponibilidad y publicación</h2>
 
         <div className="product-form-grid">
-
           <div className="product-field">
             <label htmlFor="disponibilidad">
               Disponibilidad
@@ -612,7 +637,6 @@ const gestionarImagen = async (imagen, accion) => {
               <option value={0}>Inactivo</option>
             </select>
           </div>
-
         </div>
       </section>
 
@@ -632,67 +656,67 @@ const gestionarImagen = async (imagen, accion) => {
           </span>
         </div>
 
-       {/* FOTOGRAFÍAS EXISTENTES */}
-      {imagenesExistentes.length > 0 && (
-        <div className="product-existing-images">
-          <h3>Imágenes actuales</h3>
+        {/* IMÁGENES EXISTENTES */}
+        {imagenesExistentes.length > 0 && (
+          <div className="product-existing-images">
+            <h3>Imágenes actuales</h3>
 
-          <div className="product-image-preview">
-            {imagenesExistentes.map((imagen) => {
-              const esPrincipal = Number(imagen.es_principal) === 1;
-              const procesando =
-                Number(gestionandoImagenId) === Number(imagen.id);
+            <div className="product-image-preview">
+              {imagenesExistentes.map((imagen) => {
+                const esPrincipal = Number(imagen.es_principal) === 1;
+                const procesando =
+                  Number(gestionandoImagenId) === Number(imagen.id);
 
-              return (
-                <div
-                  className="product-image-preview-item"
-                  key={imagen.id}
-                >
-                  <img
-                    src={`/${imagen.ruta}`}
-                    alt={imagen.texto_alternativo || formulario.nombre}
-                  />
+                return (
+                  <div
+                    className="product-image-preview-item"
+                    key={imagen.id}
+                  >
+                    <img
+                      src={`/${imagen.ruta}`}
+                      alt={imagen.texto_alternativo || formulario.nombre}
+                    />
 
-                  {esPrincipal && (
-                    <span className="product-main-image-label">
-                      Principal
-                    </span>
-                  )}
+                    {esPrincipal && (
+                      <span className="product-main-image-label">
+                        Principal
+                      </span>
+                    )}
 
-                  <span>{imagen.ruta.split("/").pop()}</span>
+                    <span>{imagen.ruta.split("/").pop()}</span>
 
-                  <div className="product-image-management">
-                    <button
-                      type="button"
-                      onClick={() => gestionarImagen(imagen, "principal")}
-                      disabled={
-                        guardando ||
-                        gestionandoImagenId !== null ||
-                        esPrincipal
-                      }
-                    >
-                      {procesando && !esPrincipal
-                        ? "Procesando..."
-                        : esPrincipal
-                          ? "Imagen principal"
-                          : "Establecer como principal"}
-                    </button>
+                    <div className="product-image-management">
+                      <button
+                        type="button"
+                        onClick={() => gestionarImagen(imagen, "principal")}
+                        disabled={
+                          guardando ||
+                          gestionandoImagenId !== null ||
+                          esPrincipal
+                        }
+                      >
+                        {procesando && !esPrincipal
+                          ? "Procesando..."
+                          : esPrincipal
+                            ? "Imagen principal"
+                            : "Establecer como principal"}
+                      </button>
 
-                    <button
-                      type="button"
-                      className="product-image-delete"
-                      onClick={() => gestionarImagen(imagen, "eliminar")}
-                      disabled={guardando || gestionandoImagenId !== null}
-                    >
-                      {procesando ? "Procesando..." : "Eliminar"}
-                    </button>
+                      <button
+                        type="button"
+                        className="product-image-delete"
+                        onClick={() => gestionarImagen(imagen, "eliminar")}
+                        disabled={guardando || gestionandoImagenId !== null}
+                      >
+                        {procesando ? "Procesando..." : "Eliminar"}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
         {/* SELECTOR DE NUEVAS IMÁGENES */}
         <label
@@ -788,7 +812,7 @@ const gestionarImagen = async (imagen, accion) => {
         </div>
       )}
 
-      {/* ÚNICO BOTÓN DE ACCIÓN */}
+      {/* BOTÓN DE ACCIÓN */}
       <div className="product-form-actions">
         <button
           type="submit"

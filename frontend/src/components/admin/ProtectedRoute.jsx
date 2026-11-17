@@ -6,10 +6,18 @@ function ProtectedRoute({ children }) {
   const [autenticado, setAutenticado] = useState(null);
 
   useEffect(() => {
+    const controlador = new AbortController();
+
     const verificarSesion = async () => {
       try {
         const respuesta = await fetch("/api/auth/verificar.php", {
-          credentials: "include"
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+          signal: controlador.signal,
+          headers: {
+            Accept: "application/json"
+          }
         });
 
         const resultado = await respuesta.json();
@@ -17,16 +25,28 @@ function ProtectedRoute({ children }) {
         setAutenticado(
           respuesta.ok && resultado.authenticated === true
         );
+
       } catch (error) {
-        setAutenticado(false);
+        if (error.name !== "AbortError") {
+          console.error("Error verificando sesión:", error);
+          setAutenticado(false);
+        }
       }
     };
 
     verificarSesion();
+
+    return () => {
+      controlador.abort();
+    };
   }, []);
 
   if (autenticado === null) {
-    return <p style={{ padding: "30px" }}>Verificando acceso...</p>;
+    return (
+      <div style={{ padding: "30px", textAlign: "center" }}>
+        Verificando acceso...
+      </div>
+    );
   }
 
   if (!autenticado) {

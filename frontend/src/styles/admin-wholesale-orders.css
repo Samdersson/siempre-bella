@@ -641,3 +641,158 @@
     flex-direction: column;
   }
 }
+/* Historial de seguimiento de pedidos mayoristas */
+.wo-history-section {
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid #e8eaf0;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.wo-history-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.wo-history-heading-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border-radius: 12px;
+  color: #6546c7;
+  background: #f1edff;
+}
+
+.wo-history-heading h3 {
+  margin: 0;
+  color: #202333;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.wo-history-heading p {
+  margin: 4px 0 0;
+  color: #85899a;
+  font-size: 12px;
+}
+
+.wo-history-timeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.wo-history-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 12px;
+  padding-bottom: 22px;
+}
+
+.wo-history-item:not(:last-child)::before {
+  position: absolute;
+  top: 32px;
+  bottom: 0;
+  left: 16px;
+  width: 1px;
+  background: #e5e7ef;
+  content: "";
+}
+
+.wo-history-marker {
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #e5defe;
+  border-radius: 50%;
+  color: #6546c7;
+  background: #f7f4ff;
+}
+
+.wo-history-content {
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.wo-history-event-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.wo-history-event-top strong {
+  color: #25283a;
+  font-size: 14px;
+  text-transform: capitalize;
+}
+
+.wo-history-event-top time {
+  color: #85899a;
+  font-size: 11px;
+}
+
+.wo-history-transition {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 7px;
+  color: #666b7c;
+  font-size: 12px;
+}
+
+.wo-history-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 9px;
+  color: #777c8d;
+  font-size: 12px;
+}
+
+.wo-history-observation {
+  margin: 8px 0 0;
+  color: #777c8d;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.wo-history-loading,
+.wo-history-empty,
+.wo-history-error {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 14px;
+  border-radius: 10px;
+  color: #777c8d;
+  background: #f8f9fc;
+  font-size: 13px;
+}
+
+.wo-history-error {
+  color: #a33b42;
+  background: #fff3f3;
+}
+
+@media (max-width: 600px) {
+  .wo-history-section {
+    padding: 15px;
+  }
+
+  .wo-history-event-top {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+

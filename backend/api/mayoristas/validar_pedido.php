@@ -2,7 +2,10 @@
 <?php
 
 header("Content-Type: application/json; charset=utf-8");
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("X-Content-Type-Options: nosniff");
 
+// Conexión a la base de datos
 require_once __DIR__ . "/../../config/database.php";
 
 // Responder errores en formato JSON
@@ -20,6 +23,8 @@ function responder($success, $mensaje, $datos = [], $codigo = 200) {
 
 // Solo permitir POST
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+    header("Allow: POST");
+
     responder(
         false,
         "Método no permitido. Utiliza POST.",
@@ -28,36 +33,90 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     );
 }
 
+// Validar tipo de contenido
+$tipoContenido = strtolower(trim(
+    explode(";", $_SERVER["CONTENT_TYPE"] ?? "")[0]
+));
+
+if ($tipoContenido !== "application/json") {
+    responder(
+        false,
+        "El contenido debe enviarse en formato JSON.",
+        [],
+        415
+    );
+}
+
+// Limitar tamaño de entrada a 64 KB
+$longitud = (int) ($_SERVER["CONTENT_LENGTH"] ?? 0);
+
+if ($longitud > 65536) {
+    responder(
+        false,
+        "La solicitud supera el tamaño permitido.",
+        [],
+        413
+    );
+}
+
 try {
 
-    // Conexión a la base de datos
-    $database = new Database();
-    $connection = $database->connect();
+    // Leer y validar JSON
+    $contenido = file_get_contents("php://input");
 
-    // Leer los datos enviados desde React
-    $entrada = json_decode(
-        file_get_contents("php://input"),
-        true
-    );
+    if ($contenido === false || trim($contenido) === "") {
+        responder(
+            false,
+            "No se recibieron datos para validar.",
+            [],
+            400
+        );
+    }
 
-    if (!is_array($entrada)) {
-        responder(false, "El contenido JSON no es válido.", [], 400);
+    $entrada = json_decode($contenido, true);
+
+    if (json_last_error() !== JSON_ERROR_NONE || !is_array($entrada)) {
+        responder(
+            false,
+            "El contenido JSON no es válido.",
+            [],
+            400
+        );
     }
 
     $items = $entrada["productos"] ?? null;
 
     if (!is_array($items) || count($items) === 0) {
-        responder(false, "El pedido no contiene productos.", [], 400);
+        responder(
+            false,
+            "El pedido no contiene productos.",
+            [],
+            400
+        );
     }
 
     if (count($items) > 50) {
-        responder(false, "El pedido supera el máximo de productos permitido.", [], 400);
+        responder(
+            false,
+            "El pedido supera el máximo de productos permitido.",
+            [],
+            400
+        );
     }
 
     // Validar y consolidar identificadores y cantidades
     $cantidades = [];
 
     foreach ($items as $item) {
+
+        if (!is_array($item)) {
+            responder(
+                false,
+                "Hay productos con información inválida.",
+                [],
+                400
+            );
+        }
 
         $id = filter_var(
             $item["id"] ?? null,
@@ -92,7 +151,11 @@ try {
         }
     }
 
-    // Consultar el mínimo mayorista configurado
+    // Conexión a la base de datos
+    $database = new Database();
+    $connection = $database->connect();
+
+    // Consultar configuración comercial
     $consultaConfiguracion = $connection->prepare("
         SELECT
             nombre_tienda,
@@ -119,7 +182,16 @@ try {
 
     $minimoMayorista = (float) $configuracion["monto_minimo_mayorista"];
 
-    // Consultar los productos solicitados directamente en MariaDB
+    if (!is_finite($minimoMayorista) || $minimoMayorista < 0) {
+        responder(
+            false,
+            "La configuración del mínimo mayorista no es válida.",
+            [],
+            500
+        );
+    }
+
+    // Consultar productos directamente en MariaDB
     $ids = array_keys($cantidades);
 
     $marcadores = implode(
@@ -158,7 +230,7 @@ try {
 
     $productosEncontrados = $consultaProductos->fetchAll(PDO::FETCH_ASSOC);
 
-    // Indexar productos encontrados por ID
+    // Indexar productos por ID
     $productosPorId = [];
 
     foreach ($productosEncontrados as $producto) {
@@ -167,7 +239,7 @@ try {
 
     $productosValidos = [];
     $productosRechazados = [];
-    $subtotal = 0;
+    $subtotal = 0.0;
 
     // Comprobar cada producto solicitado
     foreach ($cantidades as $id => $cantidad) {
@@ -184,6 +256,7 @@ try {
 
         $producto = $productosPorId[$id];
 
+        // Validar estado del producto
         if ((int) $producto["activo"] !== 1) {
 
             $productosRechazados[] = [
@@ -195,6 +268,7 @@ try {
             continue;
         }
 
+        // Validar disponibilidad
         if ($producto["disponibilidad"] !== "disponible") {
 
             $productosRechazados[] = [
@@ -206,9 +280,10 @@ try {
             continue;
         }
 
+        // Validar precio mayorista
         $precio = (float) $producto["precio_mayorista"];
 
-        if ($precio <= 0) {
+        if (!is_finite($precio) || $precio <= 0) {
 
             $productosRechazados[] = [
                 "id" => $id,
@@ -219,7 +294,19 @@ try {
             continue;
         }
 
+        // Calcular subtotal del producto
         $totalProducto = round($precio * $cantidad, 2);
+
+        if (!is_finite($totalProducto)) {
+
+            $productosRechazados[] = [
+                "id" => $id,
+                "nombre" => $producto["nombre"],
+                "motivo" => "No fue posible calcular el subtotal del producto."
+            ];
+
+            continue;
+        }
 
         $productosValidos[] = [
             "id" => (int) $producto["id"],
@@ -235,20 +322,30 @@ try {
         $subtotal += $totalProducto;
     }
 
+    // Calcular totales
     $subtotal = round($subtotal, 2);
+
+    if (!is_finite($subtotal)) {
+        responder(
+            false,
+            "No fue posible calcular el total del pedido.",
+            [],
+            400
+        );
+    }
 
     $faltante = max(
         round($minimoMayorista - $subtotal, 2),
         0
     );
 
-    // El pedido solo es válido si todos los productos fueron aceptados
-    // y se alcanza el mínimo mayorista.
+    // Determinar si el pedido cumple las condiciones
     $pedidoValido =
         count($productosRechazados) === 0 &&
         count($productosValidos) > 0 &&
         $subtotal >= $minimoMayorista;
 
+    // Respuesta final
     responder(
         true,
         $pedidoValido
@@ -269,6 +366,7 @@ try {
 
 } catch (Throwable $e) {
 
+    // Registrar error internamente sin exponer detalles al comprador
     error_log(
         "Error validando pedido mayorista: " . $e->getMessage()
     );

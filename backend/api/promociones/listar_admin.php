@@ -5,26 +5,40 @@ require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../config/session.php';
 
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate');
+header('X-Content-Type-Options: nosniff');
 
-if (!isset($_SESSION['admin'])) {
-    http_response_code(401);
-    echo json_encode([
+function responder(int $codigo, array $datos): void
+{
+    http_response_code($codigo);
+    echo json_encode($datos, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+// Verificar sesión administrativa
+if (
+    !isset($_SESSION['admin']) ||
+    !is_array($_SESSION['admin']) ||
+    empty($_SESSION['admin']['id'])
+) {
+    responder(401, [
         'success' => false,
         'message' => 'No autorizado.'
     ]);
-    exit;
 }
 
+// Validar método HTTP
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
-    http_response_code(405);
-    echo json_encode([
+    header('Allow: GET');
+
+    responder(405, [
         'success' => false,
         'message' => 'Método no permitido.'
     ]);
-    exit;
 }
 
 try {
+
     $database = new Database();
     $pdo = $database->connect();
 
@@ -43,19 +57,12 @@ try {
 
                 p.nombre AS producto_nombre,
                 p.precio_minorista AS producto_precio_minorista,
-                p.precio_mayorista AS producto_precio_mayorista,
-
-                v.nombre AS variante_nombre,
-                v.precio_minorista AS variante_precio_minorista,
-                v.precio_mayorista AS variante_precio_mayorista
+                p.precio_mayorista AS producto_precio_mayorista
 
             FROM promociones pr
 
             INNER JOIN productos p
                 ON p.id = pr.producto_id
-
-            LEFT JOIN variantes v
-                ON v.id = pr.variante_id
 
             ORDER BY pr.creado_en DESC";
 
@@ -64,18 +71,31 @@ try {
 
     $promociones = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    echo json_encode([
+    responder(200, [
         'success' => true,
         'total' => count($promociones),
         'data' => $promociones
-    ], JSON_UNESCAPED_UNICODE);
+    ]);
 
 } catch (PDOException $e) {
-    http_response_code(500);
 
-    echo json_encode([
+    error_log(
+        'Error al listar promociones administrativas: ' . $e->getMessage()
+    );
+
+    responder(500, [
         'success' => false,
-        'message' => 'Error al listar las promociones.',
-        'error' => $e->getMessage()
-    ], JSON_UNESCAPED_UNICODE);
+        'message' => 'Error al listar las promociones.'
+    ]);
+
+} catch (Throwable $e) {
+
+    error_log(
+        'Error inesperado al listar promociones: ' . $e->getMessage()
+    );
+
+    responder(500, [
+        'success' => false,
+        'message' => 'Ocurrió un error inesperado.'
+    ]);
 }

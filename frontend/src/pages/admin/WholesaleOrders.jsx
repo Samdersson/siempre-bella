@@ -19,14 +19,18 @@ import {
   User,
   CalendarDays,
   ChevronDown,
+  History,
+  ArrowRight,
 } from "lucide-react";
 
 import AdminLayout from "../../components/layout/AdminLayout";
 import "../../styles/admin-wholesale-orders.css";
+import { obtenerHeadersCSRF } from "../../services/csrf.js";
 
 const API_LISTAR = "/api/mayoristas/listar_pedidos.php";
 const API_DETALLE = "/api/mayoristas/detalle_pedido.php";
 const API_ESTADO = "/api/mayoristas/actualizar_estado.php";
+const API_HISTORIAL = "/api/mayoristas/historial_pedido.php";
 
 const ESTADOS = [
   { value: "pendiente", label: "Pendiente" },
@@ -75,6 +79,9 @@ function WholesaleOrders() {
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState(null);
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
   const [guardandoEstado, setGuardandoEstado] = useState(false);
+  const [historial, setHistorial] = useState([]);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  const [errorHistorial, setErrorHistorial] = useState("");
 
   const cargarPedidos = useCallback(async () => {
     try {
@@ -130,71 +137,104 @@ function WholesaleOrders() {
   const abrirDetalle = async (id) => {
     try {
       setPedidoSeleccionado(null);
+      setHistorial([]);
+      setErrorHistorial("");
       setCargandoDetalle(true);
+      setCargandoHistorial(true);
 
-      const respuesta = await fetch(
-        `${API_DETALLE}?id=${encodeURIComponent(id)}`,
-        {
+      // Consultar el detalle y el historial en paralelo.
+      const [respuestaDetalle, respuestaHistorial] = await Promise.all([
+        fetch(`${API_DETALLE}?id=${encodeURIComponent(id)}`, {
           credentials: "include",
           cache: "no-store",
-        }
-      );
+        }),
+        fetch(`${API_HISTORIAL}?id=${encodeURIComponent(id)}`, {
+          credentials: "include",
+          cache: "no-store",
+        }),
+      ]);
 
-      const resultado = await respuesta.json();
+      const [resultadoDetalle, resultadoHistorial] = await Promise.all([
+        respuestaDetalle.json(),
+        respuestaHistorial.json(),
+      ]);
 
-      if (!respuesta.ok || !resultado.success) {
+      if (!respuestaDetalle.ok || !resultadoDetalle.success) {
         throw new Error(
-          resultado.message || "No fue posible consultar el pedido."
+          resultadoDetalle.message || "No fue posible consultar el pedido."
         );
       }
 
-      setPedidoSeleccionado(resultado.data);
+      // El detalle principal se muestra aunque falle la consulta del historial.
+      setPedidoSeleccionado(resultadoDetalle.data);
+
+      if (!respuestaHistorial.ok || !resultadoHistorial.success) {
+        setErrorHistorial(
+          resultadoHistorial.message || "No fue posible consultar el historial."
+        );
+        setHistorial([]);
+      } else {
+        setHistorial(resultadoHistorial.data?.historial || []);
+      }
     } catch (err) {
-      mostrarMensaje(err.message);
+      console.error("Error abriendo el detalle del pedido:", err);
+      mostrarMensaje(err.message || "No fue posible consultar el pedido.");
     } finally {
       setCargandoDetalle(false);
+      setCargandoHistorial(false);
     }
   };
 
-  const cambiarEstado = async (id, estado) => {
-    if (!id || !estado || guardandoEstado) return;
+  
+    const cambiarEstado = async (id, estado) => {
+      if (!id || !estado || guardandoEstado) return;
 
-    try {
-      setGuardandoEstado(true);
+      try {
+        setGuardandoEstado(true);
 
-      const respuesta = await fetch(API_ESTADO, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ id, estado }),
-      });
+        const respuesta = await fetch(API_ESTADO, {
+          method: "POST",
+          credentials: "include",
+          headers: await obtenerHeadersCSRF({
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify({
+            id,
+            estado,
+          }),
+        });
 
-      const resultado = await respuesta.json();
+        const resultado = await respuesta.json();
 
-      if (!respuesta.ok || !resultado.success) {
-        throw new Error(
-          resultado.message || "No fue posible actualizar el estado."
+        if (!respuesta.ok || !resultado.success) {
+          throw new Error(
+            resultado.message || "No fue posible actualizar el estado."
+          );
+        }
+
+        mostrarMensaje(
+          resultado.message || "Estado actualizado correctamente."
         );
+
+        // Actualizar listado
+        await cargarPedidos();
+
+        // Actualizar detalle si el pedido está abierto
+        if (
+          pedidoSeleccionado &&
+          Number(pedidoSeleccionado.pedido.id) === Number(id)
+        ) {
+          await abrirDetalle(id);
+        }
+
+      } catch (err) {
+        console.error("Error actualizando estado:", err);
+        mostrarMensaje(err.message || "No fue posible actualizar el estado.");
+      } finally {
+        setGuardandoEstado(false);
       }
+    };
 
-      mostrarMensaje("Estado actualizado correctamente.");
-
-      await cargarPedidos();
-
-      if (
-        pedidoSeleccionado &&
-        Number(pedidoSeleccionado.pedido.id) === Number(id)
-      ) {
-        await abrirDetalle(id);
-      }
-    } catch (err) {
-      mostrarMensaje(err.message);
-    } finally {
-      setGuardandoEstado(false);
-    }
-  };
 
   const actualizarListado = () => {
     setActualizando(true);
@@ -639,6 +679,99 @@ function WholesaleOrders() {
                       />
                     )}
                   </div>
+
+                  {/* HISTORIAL DE SEGUIMIENTO */}
+                  <section className="wo-history-section">
+                    <div className="wo-history-heading">
+                      <div className="wo-history-heading-icon">
+                        <History size={19} />
+                      </div>
+                      <div>
+                        <h3>Historial de seguimiento</h3>
+                        <p>
+                          {historial.length}{" "}
+                          {historial.length === 1 ? "evento registrado" : "eventos registrados"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {cargandoHistorial ? (
+                      <div className="wo-history-loading">
+                        <LoaderCircle size={20} className="wo-spinning" />
+                        <span>Cargando historial...</span>
+                      </div>
+                    ) : errorHistorial ? (
+                      <div className="wo-history-error">
+                        <XCircle size={17} />
+                        <span>{errorHistorial}</span>
+                      </div>
+                    ) : historial.length === 0 ? (
+                      <div className="wo-history-empty">
+                        Aún no hay eventos registrados para este pedido.
+                      </div>
+                    ) : (
+                      <div className="wo-history-timeline">
+                        {historial.map((evento, index) => {
+                          const IconoEvento =
+                            iconosEstado[evento.estado_nuevo] || Clock;
+
+                          const estadoAnterior = evento.estado_anterior
+                            ? ESTADOS.find(
+                                (item) => item.value === evento.estado_anterior
+                              )?.label || evento.estado_anterior
+                            : null;
+
+                          const estadoNuevo =
+                            ESTADOS.find(
+                              (item) => item.value === evento.estado_nuevo
+                            )?.label || evento.estado_nuevo;
+
+                          return (
+                            <article
+                              className="wo-history-item"
+                              key={evento.id}
+                            >
+                              <div className="wo-history-marker">
+                                <IconoEvento size={16} />
+                              </div>
+
+                              <div className="wo-history-content">
+                                <div className="wo-history-event-top">
+                                  <strong>{estadoNuevo}</strong>
+                                  <time>{formatoFecha(evento.fecha_cambio)}</time>
+                                </div>
+
+                                {estadoAnterior ? (
+                                  <div className="wo-history-transition">
+                                    {estadoAnterior}
+                                    <ArrowRight size={14} />
+                                    {estadoNuevo}
+                                  </div>
+                                ) : (
+                                  <div className="wo-history-transition">
+                                    Registro inicial del pedido
+                                  </div>
+                                )}
+
+                                <div className="wo-history-meta">
+                                  <User size={14} />
+                                  <span>
+                                    {evento.administrador_nombre || "Sistema"}
+                                  </span>
+                                </div>
+
+                                {evento.observacion && (
+                                  <p className="wo-history-observation">
+                                    {evento.observacion}
+                                  </p>
+                                )}
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </section>
 
                   <button
                     type="button"

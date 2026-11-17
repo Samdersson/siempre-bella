@@ -2,9 +2,13 @@
 <?php
 
 header("Content-Type: application/json; charset=utf-8");
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Pragma: no-cache");
+header("X-Content-Type-Options: nosniff");
 
 require_once __DIR__ . "/../../config/database.php";
 require_once __DIR__ . "/../../config/session.php";
+require_once __DIR__ . "/../../config/csrf.php";
 
 /**
  * Respuesta JSON.
@@ -26,16 +30,87 @@ function responder($success, $mensaje, $codigo = 200, $datos = []) {
 // 1. VERIFICAR SESIÓN ADMINISTRATIVA
 // --------------------------------------------------
 
-if (!isset($_SESSION["admin"])) {
+if (
+    !isset($_SESSION["admin"]) ||
+    !is_array($_SESSION["admin"])
+) {
     responder(false, "No tienes autorización.", 401);
 }
+
+// Obtener identidad del administrador
+$administradorId = filter_var(
+    $_SESSION["admin"]["id"] ?? null,
+    FILTER_VALIDATE_INT,
+    ["options" => ["min_range" => 1]]
+);
+
+$administradorNombre = $_SESSION["admin"]["nombre"] ?? null;
+
+if (
+    $administradorId === false ||
+    !is_string($administradorNombre) ||
+    trim($administradorNombre) === ""
+) {
+    responder(
+        false,
+        "No fue posible identificar al administrador.",
+        401
+    );
+}
+
+$administradorNombre = trim($administradorNombre);
 
 // --------------------------------------------------
 // 2. VALIDAR MÉTODO HTTP
 // --------------------------------------------------
 
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
-    responder(false, "Método no permitido.", 405);
+
+    header("Allow: POST");
+
+    responder(
+        false,
+        "Método no permitido. Utiliza POST.",
+        405
+    );
+}
+
+// --------------------------------------------------
+// 3. VALIDAR TOKEN CSRF
+// --------------------------------------------------
+
+exigirTokenCSRF();
+
+// --------------------------------------------------
+// 4. VALIDAR TIPO DE CONTENIDO
+// --------------------------------------------------
+
+$tipoContenido = strtolower(trim(
+    explode(";", $_SERVER["CONTENT_TYPE"] ?? "")[0]
+));
+
+if ($tipoContenido !== "application/json") {
+
+    responder(
+        false,
+        "El contenido debe enviarse en formato JSON.",
+        415
+    );
+}
+
+// --------------------------------------------------
+// 5. LIMITAR TAMAÑO DE SOLICITUD
+// --------------------------------------------------
+
+$longitud = (int) ($_SERVER["CONTENT_LENGTH"] ?? 0);
+
+if ($longitud > 65536) {
+
+    responder(
+        false,
+        "La solicitud supera el tamaño permitido.",
+        413
+    );
 }
 
 $connection = null;
@@ -43,10 +118,19 @@ $connection = null;
 try {
 
     // --------------------------------------------------
-    // 3. RECIBIR Y VALIDAR JSON
+    // 6. RECIBIR Y VALIDAR JSON
     // --------------------------------------------------
 
     $contenido = file_get_contents("php://input");
+
+    if ($contenido === false || trim($contenido) === "") {
+
+        responder(
+            false,
+            "No se recibieron datos para actualizar.",
+            400
+        );
+    }
 
     $entrada = json_decode($contenido, true);
 
@@ -54,16 +138,25 @@ try {
         json_last_error() !== JSON_ERROR_NONE ||
         !is_array($entrada)
     ) {
-        responder(false, "Los datos enviados no son válidos.", 400);
+
+        responder(
+            false,
+            "Los datos enviados no son válidos.",
+            400
+        );
     }
 
     // --------------------------------------------------
-    // 4. VALIDAR IDENTIFICADOR
+    // 7. VALIDAR IDENTIFICADOR
     // --------------------------------------------------
 
     $idRecibido = $entrada["id"] ?? null;
 
-    if (!is_scalar($idRecibido)) {
+    if (
+        !is_string($idRecibido) &&
+        !is_int($idRecibido)
+    ) {
+
         responder(
             false,
             "Identificador de pedido no válido.",
@@ -82,6 +175,7 @@ try {
     );
 
     if ($id === false) {
+
         responder(
             false,
             "Identificador de pedido no válido.",
@@ -90,12 +184,13 @@ try {
     }
 
     // --------------------------------------------------
-    // 5. VALIDAR ESTADO
+    // 8. VALIDAR ESTADO
     // --------------------------------------------------
 
     $estadoRecibido = $entrada["estado"] ?? null;
 
     if (!is_string($estadoRecibido)) {
+
         responder(
             false,
             "El estado enviado no es válido.",
@@ -115,6 +210,7 @@ try {
     ];
 
     if (!in_array($estado, $estadosPermitidos, true)) {
+
         responder(
             false,
             "El estado seleccionado no es válido.",
@@ -123,7 +219,7 @@ try {
     }
 
     // --------------------------------------------------
-    // 6. CONECTAR A LA BASE DE DATOS
+    // 9. CONECTAR A LA BASE DE DATOS
     // --------------------------------------------------
 
     $database = new Database();
@@ -131,26 +227,31 @@ try {
     $connection = $database->connect();
 
     if (!$connection instanceof PDO) {
+
         throw new RuntimeException(
             "No fue posible conectar con la base de datos."
         );
     }
 
     // --------------------------------------------------
-    // 7. INICIAR TRANSACCIÓN
+    // 10. INICIAR TRANSACCIÓN
     // --------------------------------------------------
 
     $connection->beginTransaction();
 
-    // Consultar y bloquear el pedido durante la operación.
+    // Bloquear pedido durante la operación
     $consulta = $connection->prepare("
         SELECT
             id,
             referencia,
             estado
+
         FROM pedidos_mayoristas
+
         WHERE id = :id
+
         LIMIT 1
+
         FOR UPDATE
     ");
 
@@ -161,6 +262,7 @@ try {
     $pedido = $consulta->fetch(PDO::FETCH_ASSOC);
 
     if (!$pedido) {
+
         $connection->rollBack();
 
         responder(
@@ -173,7 +275,7 @@ try {
     $estadoAnterior = $pedido["estado"];
 
     // --------------------------------------------------
-    // 8. EVITAR ACTUALIZACIONES INNECESARIAS
+    // 11. EVITAR CAMBIOS INNECESARIOS
     // --------------------------------------------------
 
     if ($estadoAnterior === $estado) {
@@ -195,12 +297,14 @@ try {
     }
 
     // --------------------------------------------------
-    // 9. ACTUALIZAR ESTADO
+    // 12. ACTUALIZAR ESTADO DEL PEDIDO
     // --------------------------------------------------
 
     $actualizar = $connection->prepare("
         UPDATE pedidos_mayoristas
+
         SET estado = :estado
+
         WHERE id = :id
     ");
 
@@ -210,13 +314,44 @@ try {
     ]);
 
     // --------------------------------------------------
-    // 10. CONFIRMAR TRANSACCIÓN
+    // 13. REGISTRAR CAMBIO EN EL HISTORIAL
+    // --------------------------------------------------
+
+    $insertarHistorial = $connection->prepare("
+        INSERT INTO historial_pedidos_mayoristas (
+            pedido_id,
+            estado_anterior,
+            estado_nuevo,
+            administrador_id,
+            administrador_nombre,
+            observacion
+        ) VALUES (
+            :pedido_id,
+            :estado_anterior,
+            :estado_nuevo,
+            :administrador_id,
+            :administrador_nombre,
+            :observacion
+        )
+    ");
+
+    $insertarHistorial->execute([
+        ":pedido_id" => $id,
+        ":estado_anterior" => $estadoAnterior,
+        ":estado_nuevo" => $estado,
+        ":administrador_id" => $administradorId,
+        ":administrador_nombre" => $administradorNombre,
+        ":observacion" => "Cambio de estado desde administración"
+    ]);
+
+    // --------------------------------------------------
+    // 14. CONFIRMAR TRANSACCIÓN
     // --------------------------------------------------
 
     $connection->commit();
 
     // --------------------------------------------------
-    // 11. DEVOLVER RESULTADO
+    // 15. DEVOLVER RESULTADO
     // --------------------------------------------------
 
     responder(
@@ -228,14 +363,15 @@ try {
             "referencia" => $pedido["referencia"],
             "estado_anterior" => $estadoAnterior,
             "estado_nuevo" => $estado,
-            "cambio_realizado" => true
+            "cambio_realizado" => true,
+            "administrador" => $administradorNombre
         ]
     );
 
 } catch (Throwable $e) {
 
     // --------------------------------------------------
-    // 12. REVERTIR OPERACIÓN SI OCURRE UN ERROR
+    // 16. REVERTIR OPERACIÓN SI OCURRE UN ERROR
     // --------------------------------------------------
 
     if (
