@@ -1,0 +1,134 @@
+
+.promotional-banners-section {
+    width: 100%;
+    padding: 45px 25px;
+    background: #fff;
+}
+
+.promotional-banners-container {
+    width: 100%;
+    max-width: 1250px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.promotional-banner-card {
+    position: relative;
+    width: 100%;
+    min-height: 280px;
+    overflow: hidden;
+    border-radius: 15px;
+    background: #fce8f1;
+    display: flex;
+    align-items: center;
+}
+
+.promotional-banner-image {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.promotional-banner-image img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    object-position: center;
+}
+
+.promotional-banner-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.90) 0%,
+        rgba(255, 255, 255, 0.70) 35%,
+        rgba(255, 255, 255, 0.08) 100%
+    );
+}
+
+.promotional-banner-content {
+    position: relative;
+    z-index: 2;
+    width: 55%;
+    padding: 45px;
+}
+
+.promotional-banner-content span {
+    display: block;
+    color: #d66b9a;
+    font-size: 11px;
+    letter-spacing: 4px;
+    margin-bottom: 15px;
+}
+
+.promotional-banner-content h2 {
+    color: #bd5988;
+    font-size: clamp(25px, 3vw, 38px);
+    line-height: 1.2;
+    margin: 0 0 15px;
+}
+
+.promotional-banner-content p {
+    color: #765365;
+    font-size: 15px;
+    line-height: 1.6;
+    margin-bottom: 22px;
+}
+
+.promotional-banner-button {
+    display: inline-block;
+    background: #d66b9a;
+    color: #fff;
+    text-decoration: none;
+    padding: 12px 27px;
+    border-radius: 25px;
+    font-size: 14px;
+    transition: background 0.3s ease;
+}
+
+.promotional-banner-button:hover {
+    background: #bd5988;
+}
+
+/* Diseño responsive */
+
+@media (max-width: 768px) {
+
+    .promotional-banners-section {
+        padding: 30px 15px;
+    }
+
+    .promotional-banner-card {
+        min-height: 350px;
+        align-items: flex-end;
+    }
+
+    .promotional-banner-overlay {
+        background: linear-gradient(
+            0deg,
+            rgba(255, 255, 255, 0.98) 0%,
+            rgba(255, 255, 255, 0.85) 48%,
+            rgba(255, 255, 255, 0.05) 100%
+        );
+    }
+
+    .promotional-banner-content {
+        width: 100%;
+        padding: 25px;
+    }
+
+    .promotional-banner-content h2 {
+        font-size: 26px;
+    }
+
+    .promotional-banner-content p {
+        font-size: 14px;
+    }
+
+}

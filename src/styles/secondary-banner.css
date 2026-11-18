@@ -1,0 +1,135 @@
+
+.secondary-banner {
+    width: 100%;
+    padding: 55px 25px;
+    background: #fce8f1;
+}
+
+.secondary-banner-grid {
+    max-width: 1250px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 25px;
+}
+
+.secondary-banner-card {
+    position: relative;
+    min-height: 280px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    border-radius: 14px;
+    background: white;
+    box-shadow: 0 5px 20px rgba(120, 55, 85, 0.07);
+}
+
+.secondary-banner-image {
+    position: absolute;
+    inset: 0;
+    display: block;
+}
+
+.secondary-banner-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.secondary-banner-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.97) 0%,
+        rgba(255, 255, 255, 0.90) 43%,
+        rgba(255, 255, 255, 0.08) 100%
+    );
+    pointer-events: none;
+}
+
+.secondary-banner-content {
+    position: relative;
+    z-index: 1;
+    width: 68%;
+    padding: 35px;
+}
+
+.secondary-banner-content span {
+    color: #d66b9a;
+    font-size: 11px;
+    letter-spacing: 3px;
+    font-weight: 700;
+}
+
+.secondary-banner-content h2 {
+    color: #bd5988;
+    font-size: clamp(21px, 2.2vw, 30px);
+    line-height: 1.2;
+    margin: 12px 0;
+}
+
+.secondary-banner-content p {
+    color: #765365;
+    font-size: 14px;
+    line-height: 1.6;
+    margin-bottom: 20px;
+}
+
+.secondary-banner-button {
+    display: inline-flex;
+    align-items: center;
+    padding: 11px 22px;
+    border-radius: 25px;
+    background: #d66b9a;
+    color: white;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.2s, transform 0.2s;
+}
+
+.secondary-banner-button:hover {
+    background: #bd5988;
+    transform: translateY(-2px);
+}
+
+@media (max-width: 850px) {
+    .secondary-banner-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .secondary-banner-card {
+        min-height: 270px;
+    }
+}
+
+@media (max-width: 600px) {
+    .secondary-banner {
+        padding: 30px 15px;
+    }
+
+    .secondary-banner-card {
+        min-height: 310px;
+    }
+
+    .secondary-banner-card::after {
+        background: linear-gradient(
+            0deg,
+            rgba(255, 255, 255, 0.97) 0%,
+            rgba(255, 255, 255, 0.90) 55%,
+            rgba(255, 255, 255, 0.08) 100%
+        );
+    }
+
+    .secondary-banner-content {
+        width: 100%;
+        padding: 22px;
+        align-self: flex-end;
+    }
+
+    .secondary-banner-content h2 {
+        font-size: 24px;
+    }
+}
