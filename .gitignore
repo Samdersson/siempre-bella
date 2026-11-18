@@ -31,3 +31,10 @@ backend/uploads/*
 # Configuración local
 .vscode/
 .idea/
+
+# Archivos locales de diagnóstico y certificados
+backend/config/certs/
+backend/probar_conexion.php
+
+# Respaldos locales de auditoría
+backup_auditoria_*/

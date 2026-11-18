@@ -21,7 +21,7 @@ import Cart from "./pages/store/Cart";
 import Wholesale from "./pages/store/Wholesale";
 
 // Páginas administrativas
-import Login from "./pages/admin/login";
+import Login from "./pages/admin/Login.jsx";
 import Dashboard from "./pages/admin/Dashboard";
 import Products from "./pages/admin/Products.jsx";
 import NewProduct from "./pages/admin/NewProduct.jsx";
