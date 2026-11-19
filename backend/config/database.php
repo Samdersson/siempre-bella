@@ -1,3 +1,4 @@
+
 <?php
 
 class Database
@@ -6,66 +7,32 @@ class Database
 
     public function __construct()
     {
-        $envConfig = [
-            'host' => getenv('DB_HOST'),
-            'database' => getenv('DB_NAME'),
-            'username' => getenv('DB_USER'),
-            'password' => getenv('DB_PASSWORD')
+        $this->config = [
+            'host' => getenv('MYSQLHOST'),
+            'port' => getenv('MYSQLPORT') ?: '3306',
+            'database' => getenv('MYSQLDATABASE'),
+            'username' => getenv('MYSQLUSER'),
+            'password' => getenv('MYSQLPASSWORD')
         ];
 
-        $hasEnvConfig = false;
-
-        foreach ($envConfig as $value) {
-            if ($value !== false && $value !== '') {
-                $hasEnvConfig = true;
-                break;
-            }
-        }
-
-        if ($hasEnvConfig) {
-            foreach ($envConfig as $value) {
-                if ($value === false || $value === '') {
-                    throw new RuntimeException(
-                        'La configuración de producción está incompleta.'
-                    );
-                }
-            }
-
-            $this->config = $envConfig;
-            return;
-        }
-
-        $configFile = __DIR__ . '/database.local.php';
-
-        if (!file_exists($configFile)) {
-            throw new RuntimeException(
-                'No se encontró la configuración de la base de datos.'
-            );
-        }
-
-        $config = require $configFile;
-
-        if (!is_array($config)) {
-            throw new RuntimeException(
-                'El archivo de configuración no es válido.'
-            );
-        }
-
-        foreach (['host', 'database', 'username', 'password'] as $key) {
-            if (!array_key_exists($key, $config)) {
+        foreach ($this->config as $key => $value) {
+            if ($value === false || $value === '') {
                 throw new RuntimeException(
-                    'Falta una configuración de base de datos.'
+                    "Falta la variable de conexión: {$key}"
                 );
             }
         }
-
-        $this->config = $config;
     }
 
     public function connect(): PDO
     {
         try {
-            $dsn = "mysql:host={$this->config['host']};dbname={$this->config['database']};charset=utf8mb4";
+            $dsn = sprintf(
+                'mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4',
+                $this->config['host'],
+                $this->config['port'],
+                $this->config['database']
+            );
 
             return new PDO(
                 $dsn,
@@ -80,7 +47,7 @@ class Database
 
         } catch (PDOException $e) {
             throw new RuntimeException(
-                'No fue posible conectar con la base de datos.',
+                'No fue posible conectar con MySQL.',
                 0,
                 $e
             );
