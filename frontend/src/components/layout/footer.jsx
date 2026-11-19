@@ -80,7 +80,7 @@ function Footer() {
             <h3>Nuestra tienda</h3>
 
             <Link to="/">Inicio</Link>
-            <Link to="/mayoristas">Mayoristas</Link>
+            {/* <Link to="/mayoristas">Mayoristas</Link> */}
           </div>
 
           {/* ATENCIÓN */}
@@ -122,11 +122,29 @@ function Footer() {
 
         </div>
 
+        {/* DERECHOS RESERVADOS DE LA TIENDA */}
         <div className="footer-bottom">
           <p>
             © {new Date().getFullYear()} {nombreTienda}.
             Todos los derechos reservados.
           </p>
+        </div>
+
+        {/* CRÉDITO DEL DESARROLLADOR */}
+        <div className="developer-credit">
+          <span>Desarrollado por</span>
+
+          <a
+            href="https://github.com/Samdersson"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            360 DIGITAL
+          </a>
+
+          <small>
+            Marketing · Publicidad · Desarrollo Digital
+          </small>
         </div>
 
       </div>

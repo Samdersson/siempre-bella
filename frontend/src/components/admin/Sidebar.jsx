@@ -20,14 +20,14 @@ function Sidebar() {
   const enlaces = [
     { nombre: "Resumen", ruta: "/admin", icono: LayoutDashboard, exacto: true },
     { nombre: "Productos", ruta: "/admin/productos", icono: Package },
-    { nombre: "Pedidos mayoristas", ruta: "/admin/pedidos-mayoristas", icono: ShoppingBag },
+    // { nombre: "Pedidos mayoristas", ruta: "/admin/pedidos-mayoristas", icono: ShoppingBag },
     { nombre: "Categorías", ruta: "/admin/categorias", icono: Tags },
     { nombre: "Marcas", ruta: "/admin/marcas", icono: Award },
-    { nombre: "Promociones", ruta: "/admin/promociones", icono: Megaphone },
+    // { nombre: "Promociones", ruta: "/admin/promociones", icono: Megaphone },
     { nombre: "Biblioteca multimedia", ruta: "/admin/multimedia", icono: Images },
     { nombre: "Banners y contenido", ruta: "/admin/contenido", icono: Image },
     { nombre: "Configuración", ruta: "/admin/configuracion", icono: Settings },
-    { nombre: "Reportes comerciales", ruta: "/admin/reportes", icono: FileSpreadsheet },
+    // { nombre: "Reportes comerciales", ruta: "/admin/reportes", icono: FileSpreadsheet },
   ];
 
   return (

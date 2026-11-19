@@ -77,12 +77,12 @@ const Header = () => {
                         </NavLink>
                     ))}
 
-                    <NavLink
+                    {/* <NavLink
                         to="/mayoristas"
                         onClick={() => setMenuOpen(false)}
                     >
                         Mayoristas
-                    </NavLink>
+                    </NavLink> */}
 
                 </nav>
 
