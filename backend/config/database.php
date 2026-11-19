@@ -45,6 +45,8 @@ class Database
             );
 
         } catch (PDOException $e) {
+            error_log('Error PDO MySQL: ' . $e->getMessage());
+
             throw new RuntimeException(
                 'No fue posible conectar con MySQL.',
                 0,
