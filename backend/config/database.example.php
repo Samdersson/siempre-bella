@@ -1,8 +1,10 @@
 <?php
 
 return [
-    'host' => 'localhost',
-    'database' => 'nombre_de_tu_base_de_datos',
-    'username' => 'tu_usuario',
-    'password' => 'tu_contraseña'
+    'host' => getenv('DB_HOST'),
+    'port' => getenv('DB_PORT') ?: 3306,
+    'database' => getenv('DB_DATABASE'),
+    'username' => getenv('DB_USERNAME'),
+    'password' => getenv('DB_PASSWORD'),
+    'charset' => 'utf8mb4',
 ];

@@ -34,7 +34,9 @@ backend/uploads/*
 
 # Archivos locales de diagnóstico y certificados
 backend/config/certs/
-backend/probar_conexion.php
 
 # Respaldos locales de auditoría
 backup_auditoria_*/
+
+# Configuraci�n real de base de datos
+backend/config/db.php
