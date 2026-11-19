@@ -61,11 +61,13 @@ function Footer() {
 
   return (
     <footer className="store-footer">
+
       <div className="footer-container">
 
+        {/* FOOTER COMERCIAL DE LA TIENDA */}
         <div className="footer-main">
 
-          {/* IDENTIDAD DE LA TIENDA */}
+          {/* IDENTIDAD */}
           <div className="footer-brand">
             <h2>{nombreTienda}</h2>
 
@@ -91,7 +93,7 @@ function Footer() {
               <a
                 href={`https://wa.me/${whatsapp}`}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
               >
                 WhatsApp
               </a>
@@ -122,7 +124,7 @@ function Footer() {
 
         </div>
 
-        {/* DERECHOS RESERVADOS DE LA TIENDA */}
+        {/* DERECHOS DE LA TIENDA */}
         <div className="footer-bottom">
           <p>
             © {new Date().getFullYear()} {nombreTienda}.
@@ -130,21 +132,73 @@ function Footer() {
           </p>
         </div>
 
-        {/* CRÉDITO DEL DESARROLLADOR */}
-        <div className="developer-credit">
-          <span>Desarrollado por</span>
+        {/* CRÉDITOS DEL DESARROLLADOR */}
+        <div className="site-footer">
 
-          <a
-            href="https://github.com/Samdersson"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            360 DIGITAL
-          </a>
+          <p className="footer-text">
+            Desarrollado por{" "}
+            <a
+              href="https://samdersson.netlify.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="dev-link"
+            >
+              <strong>Samdersson Nuñez</strong>
+            </a>
+            {" "}•{" "}
+            <a
+              href="https://360digital.netlify.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="dev-link"
+            >
+              <strong>360 Digital</strong>
+            </a>
+          </p>
 
-          <small>
-            Marketing · Publicidad · Desarrollo Digital
-          </small>
+          <div className="footer-links">
+
+            <a
+              href="https://360digital.netlify.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-dev-social btn-web"
+            >
+              <i className="fas fa-globe"></i>
+              Sitio Web 360 Digital
+            </a>
+
+            <a
+              href="https://samdersson.netlify.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-dev-social btn-portfolio"
+            >
+              <i className="fas fa-user-code"></i>
+              Portafolio desarrollador
+            </a>
+
+            <a
+              href="https://www.instagram.com/360digital.co"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-dev-social btn-instagram"
+            >
+              <i className="fab fa-instagram"></i>
+              @360digital.co
+            </a>
+
+            <a
+              href="https://wa.me/573187752351?text=%C2%A1Hola%20360Digital!%20Me%20interesa%20solicitar%20el%20desarrollo%20de%20un%20sitio%20web."
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-dev-social btn-whatsapp"
+            >
+              <i className="fab fa-whatsapp"></i>
+              Solicitar Desarrollo
+            </a>
+
+          </div>
         </div>
 
       </div>
