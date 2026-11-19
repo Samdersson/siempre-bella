@@ -1,5 +1,5 @@
 
-const API_URL = "/api";
+const API_URL = "https://abundant-gratitude-production.up.railway.app/api";
 
 export async function obtenerSecciones() {
     try {
