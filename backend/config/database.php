@@ -8,13 +8,12 @@ class Database
     public function __construct()
     {
         $this->config = [
-            'host' => getenv('MYSQLHOST'),
-            'port' => getenv('MYSQLPORT') ?: '3306',
-            'database' => getenv('MYSQLDATABASE'),
-            'username' => getenv('MYSQLUSER'),
-            'password' => getenv('MYSQLPASSWORD')
+            'host' => getenv('DB_HOST'),
+            'port' => getenv('DB_PORT') ?: '3306',
+            'database' => getenv('DB_DATABASE'),
+            'username' => getenv('DB_USERNAME'),
+            'password' => getenv('DB_PASSWORD')
         ];
-
         foreach ($this->config as $key => $value) {
             if ($value === false || $value === '') {
                 throw new RuntimeException(
