@@ -24,9 +24,7 @@ Thumbs.db
 backend/config/database.local.php
 backend/config/database.local.php
 
-# Archivos subidos por usuarios
-backend/uploads/*
-!backend/uploads/.gitkeep
+
 
 # Configuración local
 .vscode/
@@ -38,5 +36,5 @@ backend/config/certs/
 # Respaldos locales de auditoría
 backup_auditoria_*/
 
-# Configuraci�n real de base de datos
+# Configuraci�n real de base de datos
 backend/config/db.php
