@@ -1,7 +1,7 @@
 
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import logo from "../../assets/logo siempre bella.webp";
+import logo from "../../assets/logo-siempre-bella.webp";
 import "../../styles/hero.css";
 
 const API = "/api/banners/listar_publicos.php";

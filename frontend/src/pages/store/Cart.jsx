@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 import { useCart } from "../../context/CartContext";
-import logo from "../../assets/logo siempre bella.webp";
+import logo from "../../assets/logo-siempre-bella.webp";
 import "../../styles/cart.css";
 
 function Cart() {

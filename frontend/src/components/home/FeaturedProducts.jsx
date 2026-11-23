@@ -1,7 +1,7 @@
 
 import { useEffect, useState } from "react";
 import { obtenerProductos } from "../../services/api";
-import logo from "../../assets/logo siempre bella.webp";
+import logo from "../../assets/logo-siempre-bella.webp";
 import { useCart } from "../../context/CartContext";
 
 import "../../styles/featured-products.css";

@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { obtenerPromociones } from "../../services/api";
 import { useCart } from "../../context/CartContext";
-import logo from "../../assets/logo siempre bella.webp";
+import logo from "../../assets/logo-siempre-bella.webp";
 
 import "../../styles/promotions.css";
 

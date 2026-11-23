@@ -1,14 +1,16 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 import "../../styles/admin-login.css";
-import logo from "../../assets/logo siempre bella.webp";
+import logo from "../../assets/logo-siempre-bella.webp";
 
 function Login() {
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [mostrarPassword, setMostrarPassword] = useState(false);
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
 
@@ -112,9 +114,10 @@ function Login() {
             Contraseña
           </label>
 
+          <div className="admin-login-password-wrap">
           <input
             id="password"
-            type="password"
+            type={mostrarPassword ? "text" : "password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Ingresa tu contraseña"
@@ -122,6 +125,17 @@ function Login() {
             required
             disabled={cargando}
           />
+          <button
+            type="button"
+            className="admin-login-password-toggle"
+            onClick={() => setMostrarPassword((visible) => !visible)}
+            aria-label={mostrarPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+            aria-pressed={mostrarPassword}
+            disabled={cargando}
+          >
+            {mostrarPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+          </button>
+          </div>
 
           {error && (
             <div

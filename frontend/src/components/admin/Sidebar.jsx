@@ -11,7 +11,8 @@ import {
   Settings,
   Store,
   ShoppingBag,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Users
 } from "lucide-react";
 
 import "../../styles/admin-sidebar.css";
@@ -27,6 +28,7 @@ function Sidebar() {
     { nombre: "Biblioteca multimedia", ruta: "/admin/multimedia", icono: Images },
     { nombre: "Banners y contenido", ruta: "/admin/contenido", icono: Image },
     { nombre: "Configuración", ruta: "/admin/configuracion", icono: Settings },
+    { nombre: "Usuarios", ruta: "/admin/usuarios", icono: Users },
     // { nombre: "Reportes comerciales", ruta: "/admin/reportes", icono: FileSpreadsheet },
   ];
 

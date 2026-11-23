@@ -5,7 +5,7 @@ import { Link, useParams } from "react-router-dom";
 import { obtenerProductoPorSlug } from "../../services/api";
 import { useCart } from "../../context/CartContext";
 
-import logo from "../../assets/logo siempre bella.webp";
+import logo from "../../assets/logo-siempre-bella.webp";
 import "../../styles/product-detail.css";
 
 function ProductDetail() {

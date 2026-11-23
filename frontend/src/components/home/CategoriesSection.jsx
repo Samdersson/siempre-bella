@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 
 import { obtenerCategorias } from "../../services/api";
 
-import logo from "../../assets/logo siempre bella.webp";
+import logo from "../../assets/logo-siempre-bella.webp";
 import "../../styles/categories.css";
 
 function CategoriesSection() {

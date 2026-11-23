@@ -33,6 +33,7 @@ import MediaLibrary from "./pages/admin/MediaLibrary.jsx";
 import Banners from "./pages/admin/Banners.jsx";
 import Configuration from "./pages/admin/Configuration.jsx";
 import WholesaleOrders from "./pages/admin/WholesaleOrders.jsx";
+import Users from "./pages/admin/Users.jsx";
 
 // Estilos
 import "./styles/App.css";
@@ -224,6 +225,8 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            <Route path="/admin/usuarios" element={<ProtectedRoute><Users /></ProtectedRoute>} />
 
             {/* REPORTES COMERCIALES */}
             <Route

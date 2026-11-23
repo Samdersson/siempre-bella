@@ -55,4 +55,16 @@ try {
         "success" => false,
         "message" => "No fue posible consultar las secciones."
     ], JSON_UNESCAPED_UNICODE);
+
+    } catch (Throwable $e) {
+
+    error_log('ERROR SECCIONES: ' . $e->getMessage());
+
+    http_response_code(500);
+
+    echo json_encode([
+        "success" => false,
+        "message" => "No fue posible consultar las secciones."
+    ], JSON_UNESCAPED_UNICODE);
+
 }
