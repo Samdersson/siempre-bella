@@ -11,14 +11,25 @@ import { useEffect, useState } from "react";
 
 import { obtenerCategorias } from "../../services/api";
 import { useCart } from "../../context/CartContext";
+import Login from "../../pages/admin/Login.jsx";
 
 import "../../styles/header.css";
 
 const Header = () => {
     const [menuOpen, setMenuOpen] = useState(false);
+    const [loginOpen, setLoginOpen] = useState(false);
     const [categorias, setCategorias] = useState([]);
 
     const { totalUnidades } = useCart();
+
+    useEffect(() => {
+        if (!loginOpen) return;
+        const cerrarConEscape = (event) => {
+            if (event.key === "Escape") setLoginOpen(false);
+        };
+        window.addEventListener("keydown", cerrarConEscape);
+        return () => window.removeEventListener("keydown", cerrarConEscape);
+    }, [loginOpen]);
 
     useEffect(() => {
         async function cargarCategorias() {
@@ -109,13 +120,23 @@ const Header = () => {
                         )}
                     </Link>
 
-                    <button aria-label="Mi cuenta" type="button">
+                    <button aria-label="Iniciar sesión como administrador" type="button" onClick={() => setLoginOpen(true)}>
                         <UserRound />
                     </button>
 
                 </div>
 
             </div>
+            {loginOpen && (
+                <div className="admin-login-modal" role="presentation" onMouseDown={(event) => {
+                    if (event.target === event.currentTarget) setLoginOpen(false);
+                }}>
+                    <section className="admin-login-modal-content" role="dialog" aria-modal="true" aria-label="Inicio de sesión del administrador">
+                        <button className="admin-login-modal-close" type="button" aria-label="Cerrar inicio de sesión" onClick={() => setLoginOpen(false)}>×</button>
+                        <Login isModal />
+                    </section>
+                </div>
+            )}
         </header>
     );
 };

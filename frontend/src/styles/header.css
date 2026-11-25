@@ -116,9 +116,6 @@
     gap: 12px;
   }
 
-  .header-actions button:last-child {
-    display: none;
-  }
 }
 
 .header-cart-link {

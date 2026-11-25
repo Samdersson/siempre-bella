@@ -5,7 +5,7 @@ import { Eye, EyeOff } from "lucide-react";
 import "../../styles/admin-login.css";
 import logo from "../../assets/logo-siempre-bella.webp";
 
-function Login() {
+function Login({ isModal = false }) {
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
@@ -79,7 +79,7 @@ function Login() {
   };
 
   return (
-    <div className="admin-login">
+    <div className={`admin-login ${isModal ? "admin-login--modal" : ""}`}>
       <div className="admin-login-card">
 
         <img

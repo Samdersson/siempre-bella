@@ -20,10 +20,10 @@ import "../../styles/admin-sidebar.css";
 function Sidebar() {
   const enlaces = [
     { nombre: "Resumen", ruta: "/admin", icono: LayoutDashboard, exacto: true },
-    { nombre: "Productos", ruta: "/admin/productos", icono: Package },
-    { nombre: "Pedidos mayoristas", ruta: "/admin/pedidos-mayoristas", icono: ShoppingBag },
     { nombre: "Categorías", ruta: "/admin/categorias", icono: Tags },
     { nombre: "Marcas", ruta: "/admin/marcas", icono: Award },
+    { nombre: "Productos", ruta: "/admin/productos", icono: Package },
+    { nombre: "Pedidos mayoristas", ruta: "/admin/pedidos-mayoristas", icono: ShoppingBag },
     { nombre: "Promociones", ruta: "/admin/promociones", icono: Megaphone },
     { nombre: "Biblioteca multimedia", ruta: "/admin/multimedia", icono: Images },
     { nombre: "Banners y contenido", ruta: "/admin/contenido", icono: Image },
